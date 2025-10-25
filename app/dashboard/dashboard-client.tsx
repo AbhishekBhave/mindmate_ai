@@ -206,20 +206,21 @@ export default function DashboardClient({ user }: DashboardClientProps) {
 
   // Prepare chart data
   const chartData = entries
-    .filter(entry => entry.sentiment)
+    .filter(entry => entry.sentiment && typeof entry.sentiment.score === 'number' && !isNaN(entry.sentiment.score))
     .slice(0, 30)
     .map(entry => ({
       date: new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      mood: entry.sentiment!.score * 100
+      mood: Math.max(0, Math.min(100, entry.sentiment!.score * 100)) // Ensure mood is between 0-100
     }))
     .reverse()
 
   // Calculate stats
   const streak = 5 // This would come from database in real app
   const totalEntries = entries.length
-  const avgMood = entries
-    .filter(e => e.sentiment)
-    .reduce((acc, e) => acc + (e.sentiment!.score * 100), 0) / (entries.filter(e => e.sentiment).length || 1)
+  const validSentimentEntries = entries.filter(e => e.sentiment && typeof e.sentiment.score === 'number' && !isNaN(e.sentiment.score))
+  const avgMood = validSentimentEntries.length > 0 
+    ? validSentimentEntries.reduce((acc, e) => acc + (e.sentiment!.score * 100), 0) / validSentimentEntries.length
+    : 0
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-800 relative overflow-hidden">
@@ -363,6 +364,19 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                     <XAxis dataKey="date" stroke="rgba(156,163,175,0.8)" />
                     <YAxis stroke="rgba(156,163,175,0.8)" />
                     <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const value = payload[0].value
+                          const displayValue = typeof value === 'number' && !isNaN(value) ? `${value.toFixed(1)}%` : 'N/A'
+                          return (
+                            <div className="bg-black/80 border border-white/20 rounded-lg p-3 text-white">
+                              <p className="font-semibold">{label}</p>
+                              <p className="text-purple-300">Mood: {displayValue}</p>
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
                       contentStyle={{
                         backgroundColor: 'rgba(0, 0, 0, 0.8)',
                         border: '1px solid rgba(255,255,255,0.2)',
