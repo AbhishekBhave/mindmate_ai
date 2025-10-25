@@ -50,26 +50,34 @@ export default function HomePage() {
 
       {/* Floating particles */}
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(15)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-2 h-2 bg-purple-400/20 rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, -100, 0],
-              x: [0, 50, -50, 0],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: 10 + Math.random() * 10,
-              repeat: Infinity,
-              delay: Math.random() * 5,
-            }}
-          />
-        ))}
+        {[...Array(15)].map((_, i) => {
+          // Use deterministic positioning based on index to avoid hydration mismatch
+          const left = ((i * 7) % 100) + (i * 3) % 20
+          const top = ((i * 11) % 100) + (i * 5) % 15
+          const duration = 10 + (i % 10)
+          const delay = (i % 5) * 0.5
+          
+          return (
+            <motion.div
+              key={i}
+              className="absolute w-2 h-2 bg-purple-400/20 rounded-full"
+              style={{
+                left: `${left}%`,
+                top: `${top}%`,
+              }}
+              animate={{
+                y: [0, -100, 0],
+                x: [0, 50, -50, 0],
+                opacity: [0, 1, 0],
+              }}
+              transition={{
+                duration,
+                repeat: Infinity,
+                delay,
+              }}
+            />
+          )
+        })}
       </div>
 
       {/* Navigation */}

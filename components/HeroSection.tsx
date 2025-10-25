@@ -145,26 +145,32 @@ export function BackgroundElements() {
       />
 
       {/* Floating Gradient Orbs */}
-      {[...Array(6)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute w-32 h-32 rounded-full bg-gradient-to-r from-purple-400/20 to-indigo-500/20 blur-xl"
-          style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-          }}
-          animate={{
-            x: [0, 100, -100, 0],
-            y: [0, -100, 100, 0],
-            scale: [1, 1.2, 0.8, 1],
-          }}
-          transition={{
-            duration: 15 + i * 2,
-            repeat: Infinity,
-            ease: 'linear',
-          }}
-        />
-      ))}
+      {[...Array(6)].map((_, i) => {
+        // Use deterministic positioning based on index to avoid hydration mismatch
+        const left = ((i * 13) % 100) + (i * 7) % 30
+        const top = ((i * 17) % 100) + (i * 11) % 25
+        
+        return (
+          <motion.div
+            key={i}
+            className="absolute w-32 h-32 rounded-full bg-gradient-to-r from-purple-400/20 to-indigo-500/20 blur-xl"
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+            }}
+            animate={{
+              x: [0, 100, -100, 0],
+              y: [0, -100, 100, 0],
+              scale: [1, 1.2, 0.8, 1],
+            }}
+            transition={{
+              duration: 15 + i * 2,
+              repeat: Infinity,
+              ease: 'linear',
+            }}
+          />
+        )
+      })}
 
       {/* Brain Synapses */}
       <motion.div
@@ -242,28 +248,35 @@ export function HeroSection() {
 
         {/* Floating sparkles */}
         <div className="absolute inset-0 pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute text-purple-400/30"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-              animate={{
-                y: [0, -20, 0],
-                opacity: [0, 1, 0],
-                scale: [0, 1, 0],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                delay: Math.random() * 2,
-              }}
-            >
-              <Sparkles className="h-4 w-4" />
-            </motion.div>
-          ))}
+          {[...Array(20)].map((_, i) => {
+            // Use deterministic positioning based on index to avoid hydration mismatch
+            const left = ((i * 19) % 100) + (i * 3) % 15
+            const top = ((i * 23) % 100) + (i * 7) % 20
+            const delay = (i % 10) * 0.2
+            
+            return (
+              <motion.div
+                key={i}
+                className="absolute text-purple-400/30"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                }}
+                animate={{
+                  y: [0, -20, 0],
+                  opacity: [0, 1, 0],
+                  scale: [0, 1, 0],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  delay,
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+              </motion.div>
+            )
+          })}
         </div>
       </div>
     </section>
