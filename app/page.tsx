@@ -1,7 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { motion } from 'framer-motion'
@@ -16,16 +14,10 @@ import { SocialProof } from '@/components/SocialProof'
 import { DemoPreview } from '@/components/DemoPreview'
 
 export default function HomePage() {
-  const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
-  useEffect(() => {
-    // Check if user is already logged in
-    const userId = localStorage.getItem('userId')
-    if (userId) {
-      router.push('/dashboard')
-    }
-  }, [router])
+  // Removed automatic redirect - let users see the beautiful landing page first
+  // Users can manually navigate to sign-in or sign-up when they're ready
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-800 relative overflow-hidden">
