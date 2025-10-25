@@ -95,10 +95,23 @@ The `clean` script removes:
 
 ### Database Setup
 
-1. Create a new Supabase project
-2. Run the SQL schema from `docs/schema.sql`
-3. Set up Row Level Security (RLS) policies
-4. Configure authentication settings
+1. Create a new Supabase project at [supabase.com](https://supabase.com)
+
+2. Run the SQL schema:
+```sql
+-- Copy and paste the contents of docs/schema.sql into the Supabase SQL editor
+```
+
+3. Set up Row Level Security (RLS) policies:
+```sql
+-- Copy and paste the contents of supabase/policies.sql into the Supabase SQL editor
+-- This ensures users can only access their own data
+```
+
+4. Configure authentication settings:
+   - Enable email authentication in Supabase Dashboard
+   - Set up email templates (optional)
+   - Configure site URL for production (localhost:3000 for development)
 
 ## Project Structure
 
@@ -157,6 +170,22 @@ npm run build
 - Row Level Security (RLS) enabled on all database tables
 - Environment variables properly configured
 - No sensitive data exposed to client
+- Service role key never exposed to browser
+
+### Row Level Security (RLS) Policies
+
+The application uses explicit RLS policies to ensure data isolation:
+
+- **Entries**: Users can only access their own entries
+- **Sentiments**: Users can only view sentiments for their own entries
+- **Profiles**: Users can only access their own profile
+
+Policies are defined in `supabase/policies.sql`. Key principles:
+
+1. Every SELECT query is filtered by `auth.uid() = user_id` on entries
+2. Sentiment queries use `EXISTS` checks to verify entry ownership
+3. Service role is used only for server-side operations (AI analysis)
+4. Client-side queries automatically respect RLS policies
 
 ## Contributing
 

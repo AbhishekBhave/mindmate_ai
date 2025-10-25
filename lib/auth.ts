@@ -4,13 +4,13 @@ import { redirect } from 'next/navigation'
 export async function requireAuth() {
   const supabase = await createServerSupabaseClient()
   
-  const { data: { session }, error } = await supabase.auth.getSession()
+  const { data: { user }, error } = await supabase.auth.getUser()
   
-  if (error || !session) {
+  if (error || !user) {
     redirect('/sign-in')
   }
   
-  return session
+  return { user }
 }
 
 export async function getCurrentUser() {

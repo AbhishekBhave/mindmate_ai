@@ -81,40 +81,53 @@ export function MockEntry() {
   const analyzeText = async (inputText: string) => {
     setIsAnalyzing(true)
     
-    // Simulate AI analysis delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Mock analysis based on keywords
-    let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral'
-    let confidence = 75
-    let insights: string[] = []
+    try {
+      console.log('🎭 [DEMO] Calling analyze-entry API with:', inputText.substring(0, 50))
+      
+      const response = await fetch('/api/analyze-entry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entryText: inputText
+        }),
+      })
 
-    if (inputText.toLowerCase().includes('great') || inputText.toLowerCase().includes('productive') || inputText.toLowerCase().includes('accomplished')) {
-      sentiment = 'positive'
-      confidence = 89
-      insights = [
-        "You're showing signs of achievement and satisfaction",
-        "Consider celebrating this positive momentum",
-        "This energy could help with future challenges"
-      ]
-    } else if (inputText.toLowerCase().includes('overwhelmed') || inputText.toLowerCase().includes('stressed') || inputText.toLowerCase().includes('difficult')) {
-      sentiment = 'negative'
-      confidence = 82
-      insights = [
-        "It's normal to feel overwhelmed during busy periods",
-        "Consider breaking tasks into smaller, manageable steps",
-        "Remember to take breaks and practice self-care"
-      ]
-    } else {
-      insights = [
-        "Your entry shows balanced emotional expression",
-        "Consider exploring what made this day meaningful",
-        "Regular reflection helps build emotional awareness"
-      ]
+      const data = await response.json()
+      
+      if (data.ok && data.data) {
+        console.log('✅ [DEMO] Analysis received:', {
+          sentiment: data.data.sentiment,
+          confidence: data.data.confidence,
+          hasSuggestion: !!data.data.suggestion
+        })
+        
+        setAnalysis({ 
+          sentiment: data.data.sentiment,
+          confidence: data.data.confidence,
+          insights: data.data.insights || [
+            data.data.suggestion || 'Thank you for sharing your thoughts.'
+          ]
+        })
+      } else {
+        console.error('❌ [DEMO] Analysis failed:', data.error)
+        setAnalysis({ 
+          sentiment: 'neutral',
+          confidence: 50,
+          insights: ['Unable to analyze entry at this time.']
+        })
+      }
+    } catch (error) {
+      console.error('❌ [DEMO] Error analyzing text:', error)
+      setAnalysis({ 
+        sentiment: 'neutral',
+        confidence: 50,
+        insights: ['Unable to analyze entry at this time.']
+      })
+    } finally {
+      setIsAnalyzing(false)
     }
-
-    setAnalysis({ sentiment, confidence, insights })
-    setIsAnalyzing(false)
   }
 
   const handleSampleEntry = (sample: string) => {

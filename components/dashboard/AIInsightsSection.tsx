@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { Brain, Sparkles, Heart, Lightbulb, TrendingUp, BookOpen } from 'lucide-react'
+import { Brain, Sparkles, Lightbulb, TrendingUp, BookOpen, Smile, Meh, Frown } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
 interface Entry {
   id: string
@@ -152,24 +153,42 @@ export function AIInsightsSection({ entries, lastAnalysis }: AIInsightsSectionPr
 
       {/* Comprehensive Analysis Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Emotions Detected */}
+        {/* Detected Emotion Status */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-            <Heart className="h-5 w-5 text-red-500 mr-2" />
-            Emotions Detected
+            <Brain className="h-5 w-5 text-purple-500 mr-2" />
+            Detected Emotion
           </h3>
-          <div className="flex flex-wrap gap-2">
-            {displayAnalysis.emotions.map((emotion, index) => (
-              <motion.span
-                key={index}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className="px-3 py-1 bg-red-500/20 text-red-800 dark:text-red-200 text-sm rounded-full border border-red-500/30"
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Badge
+                variant="secondary"
+                className="text-sm px-3 py-1"
+                style={{
+                  backgroundColor: displayAnalysis.sentiment === 'positive' ? '#10B98120' : displayAnalysis.sentiment === 'negative' ? '#EF444420' : '#F59E0B20',
+                  color: displayAnalysis.sentiment === 'positive' ? '#10B981' : displayAnalysis.sentiment === 'negative' ? '#EF4444' : '#F59E0B',
+                  borderColor: displayAnalysis.sentiment === 'positive' ? '#10B981' : displayAnalysis.sentiment === 'negative' ? '#EF4444' : '#F59E0B'
+                }}
               >
-                {emotion}
-              </motion.span>
-            ))}
+                <div className="flex items-center gap-1">
+                  {displayAnalysis.sentiment === 'positive' && <Smile className="h-4 w-4" />}
+                  {displayAnalysis.sentiment === 'negative' && <Frown className="h-4 w-4" />}
+                  {displayAnalysis.sentiment === 'neutral' && <Meh className="h-4 w-4" />}
+                  <span className="capitalize font-semibold">{displayAnalysis.sentiment}</span>
+                </div>
+              </Badge>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {typeof displayAnalysis.confidence === 'number' && !isNaN(displayAnalysis.confidence) && displayAnalysis.confidence > 0
+                  ? (displayAnalysis.confidence).toFixed(0) + '%'
+                  : '--%'
+                } confidence
+              </span>
+            </div>
+            {displayAnalysis.suggestion && (
+              <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                "{displayAnalysis.suggestion}"
+              </p>
+            )}
           </div>
         </div>
 

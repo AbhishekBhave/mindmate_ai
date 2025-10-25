@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/server/supabase/admin'
+import { getServerSupabase } from '@/server/supabase/server-client'
 import { summarizeText } from '@/server/ai/openai'
-import { scoreSentiment, analyzeSentimentEnhanced } from '@/server/ai/sentiment'
+import { analyzeSentimentEnhanced } from '@/server/ai/sentiment'
 
 export async function POST(request: NextRequest) {
   try {
-    const { content, userId } = await request.json()
-
-    if (!content || !userId) {
+    // Get authenticated user
+    const supabase = await getServerSupabase()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !user) {
       return NextResponse.json(
-        { ok: false, error: 'Content and userId are required' },
+        { ok: false, error: 'Unauthorized. Please sign in.' },
+        { status: 401 }
+      )
+    }
+
+    const userId = user.id
+
+    const { content } = await request.json()
+
+    if (!content) {
+      return NextResponse.json(
+        { ok: false, error: 'Content is required' },
         { status: 400 }
       )
     }
@@ -41,69 +55,93 @@ export async function POST(request: NextRequest) {
     }
 
     // Analyze the entry with enhanced AI
+    let sentimentData: any = {
+      entry_id: entry.id,
+      score: 0.5,
+      label: 'neutral',
+      summary: 'Summary unavailable',
+      ai_feedback: 'Analysis in progress...',
+      confidence: 0.5,
+      emotions: []
+    }
+
     try {
+      console.log('[API/ENTRIES] Starting AI analysis for entry:', entry.id)
+      
+      // Get AI analysis
       const [summaryResult, sentimentResult] = await Promise.all([
         summarizeText(content),
         analyzeSentimentEnhanced(content)
       ])
 
-      // Save enhanced sentiment analysis
-      const { error: sentimentError } = await supabaseAdmin
-        .from('sentiments')
-        .insert({
-          entry_id: entry.id,
-          score: sentimentResult.finalScore,
-          label: sentimentResult.finalLabel,
-          summary: summaryResult.summary,
-          confidence: sentimentResult.confidence,
-          emotions: sentimentResult.emotions,
-          model_results: sentimentResult.modelResults
-        })
-
-      if (sentimentError) {
-        console.error('Error saving sentiment:', sentimentError)
+      // Update sentiment data with AI results
+      sentimentData = {
+        entry_id: entry.id,
+        score: sentimentResult.finalScore,
+        label: sentimentResult.finalLabel,
+        summary: summaryResult.summary,
+        ai_feedback: summaryResult.summary, // Use summary as AI feedback
+        confidence: sentimentResult.confidence,
+        emotions: sentimentResult.emotions,
+        model_results: sentimentResult.modelResults
       }
 
-      return NextResponse.json({
-        ok: true,
-        data: {
-          entry,
-          analysis: {
-            summary: summaryResult.summary,
-            sentiment: {
-              score: sentimentResult.finalScore,
-              label: sentimentResult.finalLabel,
-              confidence: sentimentResult.confidence,
-              emotions: sentimentResult.emotions,
-              modelResults: sentimentResult.modelResults
-            }
-          }
-        }
+      console.log('[API/ENTRIES] AI analysis complete:', {
+        label: sentimentData.label,
+        score: sentimentData.score,
+        confidence: sentimentData.confidence
       })
-    } catch (aiError: unknown) {
-      console.error('AI analysis error:', aiError instanceof Error ? aiError.message : 'Unknown error')
-      
-      // Save entry with default sentiment if AI fails
-      await supabaseAdmin
-        .from('sentiments')
-        .insert({
-          entry_id: entry.id,
-          score: 0.5,
-          label: 'neutral',
-          summary: 'Summary unavailable'
-        })
 
-      return NextResponse.json({
-        ok: true,
-        data: {
-          entry,
-          analysis: {
-            summary: 'Summary unavailable',
-            sentiment: { score: 0.5, label: 'neutral' as const }
-          }
-        }
+    } catch (aiError: unknown) {
+      console.error('[API/ENTRIES] AI analysis error:', {
+        message: aiError instanceof Error ? aiError.message : 'Unknown error',
+        error: aiError
+      })
+      // Use fallback sentiment data already set above
+    }
+
+    // Save sentiment analysis
+    const { data: savedSentiment, error: sentimentError } = await supabaseAdmin
+      .from('sentiments')
+      .insert(sentimentData)
+      .select()
+      .single()
+
+    if (sentimentError) {
+      console.error('[API/ENTRIES] Error saving sentiment:', {
+        message: sentimentError.message,
+        code: sentimentError.code,
+        details: sentimentError.details
       })
     }
+
+    // Read back the complete entry with sentiment
+    const { data: completeEntry, error: readError } = await supabaseAdmin
+      .from('entries')
+      .select(`
+        *,
+        sentiment:sentiments(
+          id,
+          entry_id,
+          score,
+          label,
+          confidence,
+          summary,
+          ai_feedback,
+          emotions
+        )
+      `)
+      .eq('id', entry.id)
+      .single()
+
+    if (readError) {
+      console.error('[API/ENTRIES] Error reading back entry:', readError)
+    }
+
+    return NextResponse.json({
+      ok: true,
+      data: completeEntry || entry
+    })
   } catch (error: unknown) {
     console.error('API error:', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
@@ -115,39 +153,63 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    console.log('📥 [ENTRIES-PUT] Received request to update sentiment')
     const { entryId, sentiment } = await request.json()
 
     if (!entryId || !sentiment) {
+      console.log('❌ [ENTRIES-PUT] Missing entryId or sentiment')
       return NextResponse.json(
         { ok: false, error: 'entryId and sentiment are required' },
         { status: 400 }
       )
     }
 
-    // Update the sentiment for the entry
-    const { error: sentimentError } = await supabaseAdmin
+    console.log('📊 [ENTRIES-PUT] Updating sentiment for entry:', entryId)
+    console.log('📊 [ENTRIES-PUT] Sentiment data:', {
+      label: sentiment.sentiment,
+      confidence: sentiment.confidence,
+      hasSuggestion: !!sentiment.suggestion,
+      hasAiFeedback: !!sentiment.ai_feedback
+    })
+
+    // Convert confidence from percentage to decimal if needed
+    const score = typeof sentiment.confidence === 'number' 
+      ? (sentiment.confidence > 1 ? sentiment.confidence / 100 : sentiment.confidence)
+      : 0.5
+
+    // Update the sentiment for the entry with ai_feedback
+    const { data, error: sentimentError } = await supabaseAdmin
       .from('sentiments')
       .upsert({
         entry_id: entryId,
-        score: sentiment.confidence / 100, // Convert percentage to decimal
+        score: score,
         label: sentiment.sentiment,
-        summary: sentiment.suggestion
+        confidence: score,
+        summary: sentiment.suggestion || sentiment.summary,
+        ai_feedback: sentiment.ai_feedback || sentiment.suggestion, // Store AI feedback
+        emotions: Array.isArray(sentiment.emotions) ? sentiment.emotions : []
+      }, {
+        onConflict: 'entry_id'
       })
+      .select()
+      .single()
 
     if (sentimentError) {
-      console.error('Error updating sentiment:', sentimentError)
+      console.error('❌ [ENTRIES-PUT] Error updating sentiment:', sentimentError)
       return NextResponse.json(
         { ok: false, error: 'Failed to update sentiment' },
         { status: 500 }
       )
     }
 
+    console.log('✅ [ENTRIES-PUT] Successfully updated sentiment')
+
     return NextResponse.json({
       ok: true,
-      data: { message: 'Sentiment updated successfully' }
+      data: { message: 'Sentiment updated successfully', sentiment: data }
     })
   } catch (error: unknown) {
-    console.error('API error:', error instanceof Error ? error.message : 'Unknown error')
+    console.error('❌ [ENTRIES-PUT] Error:', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { ok: false, error: 'Internal server error' },
       { status: 500 }
@@ -171,7 +233,17 @@ export async function GET(request: NextRequest) {
       .from('entries')
       .select(`
         *,
-        sentiment:sentiments(*)
+        sentiment:sentiments(
+          id,
+          entry_id,
+          score,
+          label,
+          confidence,
+          summary,
+          ai_feedback,
+          emotions,
+          created_at
+        )
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })

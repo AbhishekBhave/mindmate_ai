@@ -10,16 +10,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Send, Plus, Edit2, Trash2, TrendingUp, Calendar, Clock, Heart, 
   Brain, Sparkles, Target, BookOpen, BarChart3, Users, Settings,
-  ChevronDown, ChevronUp, Eye, EyeOff
+  ChevronDown, ChevronUp, Eye, EyeOff, Bell, Smile, Meh, Frown
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
+import type { DashboardData } from '@/lib/dashboard-data'
 import { JournalHeader } from '@/components/dashboard/JournalHeader'
 import { AnimatedBackground } from '@/components/dashboard/AnimatedBackground'
 import { AIInsightsSection } from '@/components/dashboard/AIInsightsSection'
 import { DashboardAnalyzer } from '@/components/dashboard/DashboardAnalyzer'
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart } from 'recharts'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface Entry {
   id: string
@@ -28,25 +33,21 @@ interface Entry {
   word_count?: number
   reading_time?: number
   sentiment?: {
+    id: string
+    entry_id: string
     score: number
     label: string
     confidence: number
     emotions?: string[]
     summary?: string
+    ai_feedback?: string
+    created_at: string
   }
-}
-
-interface AnalyticsData {
-  weeklyEntries: number
-  avgMoodScore: number
-  moodDistribution: { positive: number; neutral: number; negative: number }
-  emotionsDetected: string[]
-  streak: number
-  totalWords: number
 }
 
 interface DashboardClientProps {
   user: SupabaseUser
+  initialData: DashboardData
 }
 
 const COLORS = {
@@ -60,34 +61,28 @@ const COLORS = {
   }
 }
 
-export default function DashboardClient({ user }: DashboardClientProps) {
-  const [entries, setEntries] = useState<Entry[]>([])
+export default function DashboardClient({ user, initialData }: DashboardClientProps) {
+  const [entries, setEntries] = useState<Entry[]>(initialData.entries)
+  const [moodGraph, setMoodGraph] = useState(initialData.moodGraph)
+  const [insights, setInsights] = useState(initialData.insights)
   const [newEntry, setNewEntry] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'idle'>('idle')
   const [placeholderText, setPlaceholderText] = useState('How are you feeling today? What\'s on your mind?')
   const [lastAnalysis, setLastAnalysis] = useState<any>(null)
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [showMoodChart, setShowMoodChart] = useState(true)
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
 
-  const suggestedPrompts = [
-    'What made you smile today?',
-    'Describe a challenge you overcame',
-    'What are you grateful for?',
-    'How did you feel about your interactions today?',
-    'What is one thing you want to achieve tomorrow?',
-    'Reflect on a recent success or learning experience.',
-  ]
-
   useEffect(() => {
-    if (user?.id) {
-      fetchEntries(user.id)
-      fetchAnalytics(user.id)
+    // Set last analysis from first entry if available
+    if (entries.length > 0 && entries[0].sentiment) {
+      updateLastAnalysis(entries[0].sentiment)
     }
-  }, [user])
+  }, [entries])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -96,47 +91,36 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     }
   }, [newEntry])
 
-  const fetchEntries = async (userId: string) => {
+  const refreshDashboard = async () => {
     try {
-      const response = await fetch(`/api/entries?userId=${userId}`)
-      const data = await response.json()
-
-      if (data.ok) {
-        setEntries(data.data || [])
-        if (data.data && data.data.length > 0) {
-          updateLastAnalysis(data.data[0].sentiment)
-        }
-      } else {
-        toast.error('Failed to fetch entries')
-      }
-    } catch {
-      toast.error('Failed to fetch entries')
-    }
-  }
-
-  const fetchAnalytics = async (userId: string) => {
-    try {
-      const response = await fetch(`/api/analytics?userId=${userId}`)
-      const data = await response.json()
-
-      if (data.ok) {
-        setAnalytics(data.data)
-      }
+      // Trigger a page reload to get fresh server data
+      router.refresh()
     } catch (error) {
-      console.error('Failed to fetch analytics:', error)
+      console.error('Error refreshing dashboard:', error)
     }
   }
 
   const updateLastAnalysis = (sentiment: Entry['sentiment']) => {
     if (!sentiment) {
+      console.log('📊 [DASHBOARD] No sentiment data available')
       setLastAnalysis(null)
       return
     }
 
+    // Use ai_feedback if available, otherwise fallback to summary
+    const aiFeedback = sentiment.ai_feedback || sentiment.summary || 'Ready for today\'s reflection? I\'m here to listen.'
+    
+    console.log('📊 [DASHBOARD] Updating last analysis:', {
+      label: sentiment.label,
+      hasAiFeedback: !!sentiment.ai_feedback,
+      hasSummary: !!sentiment.summary,
+      feedbackLength: aiFeedback.length
+    })
+
     setLastAnalysis({
       sentiment: sentiment.label,
-      confidence: sentiment.confidence,
-      suggestion: sentiment.summary || 'Ready for today\'s reflection? I\'m here to listen.',
+      confidence: typeof sentiment.confidence === 'number' ? Math.round(sentiment.confidence * 100) : 50,
+      suggestion: aiFeedback,
       emotions: sentiment.emotions || ['Reflective'],
       insights: [
         `Your entry shows ${sentiment.label} emotional patterns.`,
@@ -157,83 +141,217 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     e.preventDefault()
     if (!newEntry.trim() || !user?.id) return
 
+    const entryContent = newEntry
     setIsLoading(true)
     setAutoSaveStatus('saving')
     
     try {
-      // First, save the entry
+      console.log('📝 [DASHBOARD] Submitting entry...')
+      
+      // Submit entry with analysis to the API
       const response = await fetch('/api/entries', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: newEntry,
-          userId: user.id
+          content: entryContent
         }),
       })
 
       const data = await response.json()
 
-      if (data.ok) {
-        // Then analyze the entry with AI
-        console.log('🤖 Calling /api/analyze-entry API...')
-        try {
-          const analysisResponse = await fetch('/api/analyze-entry', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              entryText: newEntry
-            }),
-          })
-
-          console.log('📊 Analysis API response status:', analysisResponse.status)
-          const analysisData = await analysisResponse.json()
-          console.log('📊 Analysis data received:', analysisData)
-          
-          if (analysisData.ok) {
-            // Store the comprehensive analysis for immediate display
-            setLastAnalysis(analysisData.data)
-            console.log('✅ Analysis stored in lastAnalysis state')
-            
-            // Update the entry with AI analysis
-            const updateResponse = await fetch('/api/entries', {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                entryId: data.data.id,
-                sentiment: analysisData.data
-              }),
-            })
-          }
-        } catch (analysisError) {
-          console.error('AI Analysis failed:', analysisError)
-          // Continue without AI analysis
+      if (data.ok && data.data) {
+        console.log('✅ [DASHBOARD] Entry saved:', data.data)
+        
+        // Extract sentiment data from response
+        const sentiment = data.data.sentiment?.[0] || data.data.sentiment
+        
+        // Transform to match Entry interface
+        const newEntry: Entry = {
+          id: data.data.id,
+          content: data.data.content,
+          created_at: data.data.created_at,
+          word_count: data.data.word_count,
+          reading_time: data.data.reading_time,
+          sentiment: sentiment ? {
+            id: sentiment.id,
+            entry_id: sentiment.entry_id,
+            score: sentiment.score,
+            label: sentiment.label,
+            confidence: sentiment.confidence,
+            emotions: sentiment.emotions || [],
+            summary: sentiment.summary,
+            ai_feedback: sentiment.ai_feedback || sentiment.summary,
+            created_at: data.data.created_at
+          } : undefined
         }
 
+        // Optimistically add new entry to top of list immediately
+        setEntries(prev => [newEntry, ...prev])
+        
+        // Update mood graph by recalculating with new entry
+        const updatedGraph = recalculateMoodGraph([newEntry, ...entries])
+        setMoodGraph(updatedGraph)
+        
+        // Update insights
+        const updatedInsights = calculateInsightsFromEntries([newEntry, ...entries])
+        setInsights(updatedInsights)
+        
+        // Update last analysis for AI guidance
+        if (sentiment) {
+          setLastAnalysis({
+            sentiment: sentiment.label,
+            confidence: Math.round(sentiment.confidence * 100),
+            suggestion: sentiment.ai_feedback || sentiment.summary || 'Analysis complete',
+            emotions: sentiment.emotions || [],
+            insights: [`Your entry shows ${sentiment.label} emotional patterns.`],
+            suggestions: ['Consider reflecting on this entry later.'],
+            patterns: ['Clear emotional expression'],
+            growthAreas: ['Regular reflection practice']
+          })
+        }
+        
         toast.success('Entry saved successfully! 🎉', {
           description: 'Your thoughts have been recorded and analyzed',
         })
+        
         setNewEntry('')
         setAutoSaveStatus('saved')
-        fetchEntries(user.id)
-        fetchAnalytics(user.id)
         
         // Reset status after 2 seconds
         setTimeout(() => setAutoSaveStatus('idle'), 2000)
       } else {
+        console.error('❌ [DASHBOARD] Failed to save entry:', data.error)
         toast.error(data.error || 'Failed to save entry')
         setAutoSaveStatus('idle')
       }
-    } catch {
+    } catch (error) {
+      console.error('❌ [DASHBOARD] Error submitting entry:', error)
       toast.error('An error occurred. Please try again.')
       setAutoSaveStatus('idle')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Helper to recalculate mood graph on client
+  const recalculateMoodGraph = (entriesList: Entry[]) => {
+    const entriesWithSentiment = entriesList.filter(e => e.sentiment)
+    if (entriesWithSentiment.length === 0) return []
+
+    const dayBuckets = new Map<string, { scores: number[], labels: string[] }>()
+
+    entriesWithSentiment.forEach(entry => {
+      const date = new Date(entry.created_at)
+      const dateKey = date.toISOString().split('T')[0]
+
+      if (!dayBuckets.has(dateKey)) {
+        dayBuckets.set(dateKey, { scores: [], labels: [] })
+      }
+
+      const bucket = dayBuckets.get(dateKey)!
+      bucket.scores.push(entry.sentiment!.score)
+      bucket.labels.push(entry.sentiment!.label)
+    })
+
+    const graphData = Array.from(dayBuckets.entries())
+      .map(([date, bucket]) => {
+        const avgScore = bucket.scores.reduce((sum, score) => sum + score, 0) / bucket.scores.length
+        
+        let label: 'positive' | 'neutral' | 'negative'
+        if (avgScore >= 0.6) {
+          label = 'positive'
+        } else if (avgScore <= 0.4) {
+          label = 'negative'
+        } else {
+          label = 'neutral'
+        }
+
+        const clampedScore = Math.max(0, Math.min(1, avgScore))
+
+        return {
+          date,
+          avgScore: clampedScore,
+          label
+        }
+      })
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    return graphData
+  }
+
+  // Helper to recalculate insights on client
+  const calculateInsightsFromEntries = (entriesList: Entry[]) => {
+    const entriesWithSentiment = entriesList.filter(e => e.sentiment)
+    
+    if (entriesWithSentiment.length === 0) {
+      return {
+        weeklyEntries: 0,
+        avgMoodScore: 0.5,
+        moodDistribution: { positive: 0, neutral: 0, negative: 0 },
+        streak: 0
+      }
+    }
+
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    sevenDaysAgo.setHours(0, 0, 0, 0)
+
+    const recentEntries = entriesWithSentiment.filter(entry => 
+      new Date(entry.created_at) >= sevenDaysAgo
+    )
+
+    const weeklyEntries = recentEntries.length
+    const avgMoodScore = recentEntries.length > 0
+      ? recentEntries.reduce((sum, entry) => sum + (entry.sentiment?.score || 0.5), 0) / recentEntries.length
+      : 0.5
+
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    fourteenDaysAgo.setHours(0, 0, 0, 0)
+
+    const moodDistribution = { positive: 0, neutral: 0, negative: 0 }
+    entriesWithSentiment
+      .filter(entry => new Date(entry.created_at) >= fourteenDaysAgo)
+      .forEach(entry => {
+        const label = entry.sentiment?.label
+        if (label === 'positive') moodDistribution.positive++
+        else if (label === 'negative') moodDistribution.negative++
+        else moodDistribution.neutral++
+      })
+
+    // Calculate streak
+    const entryDates = new Set(
+      entriesWithSentiment.map(entry => {
+        const date = new Date(entry.created_at)
+        return date.toISOString().split('T')[0]
+      })
+    )
+    const sortedDates = Array.from(entryDates).sort((a, b) => b.localeCompare(a))
+    
+    let streak = 0
+    const today = new Date().toISOString().split('T')[0]
+    let checkDate = today
+    
+    for (const entryDate of sortedDates) {
+      const date1 = new Date(checkDate)
+      const date2 = new Date(entryDate)
+      const diffDays = Math.floor((date1.getTime() - date2.getTime()) / (1000 * 60 * 60 * 24))
+      
+      if (diffDays === 0 || diffDays === 1) {
+        streak++
+        checkDate = entryDate
+      } else {
+        break
+      }
+    }
+
+    return {
+      weeklyEntries,
+      avgMoodScore,
+      moodDistribution,
+      streak
     }
   }
 
@@ -267,7 +385,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
 
       if (data.ok) {
         toast.success('Entry deleted successfully')
-        fetchEntries(user.id)
+        await refreshDashboard()
       } else {
         toast.error(data.error || 'Failed to delete entry')
       }
@@ -312,6 +430,15 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     }
   }
 
+  const suggestedPrompts = [
+    'What made you smile today?',
+    'Describe a challenge you overcame',
+    'What are you grateful for?',
+    'How did you feel about your interactions today?',
+    'What is one thing you want to achieve tomorrow?',
+    'Reflect on a recent success or learning experience.',
+  ]
+
   const getSentimentEmoji = (sentiment: string) => {
     switch (sentiment) {
       case 'positive': return '😊'
@@ -320,24 +447,27 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     }
   }
 
-  // Prepare chart data
-  const chartData = entries
-    .filter(entry => entry.sentiment && typeof entry.sentiment.score === 'number' && !isNaN(entry.sentiment.score))
-    .slice(0, 30)
-    .map(entry => ({
-      date: new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      mood: Math.max(0, Math.min(100, entry.sentiment!.score * 100)),
-      confidence: Math.round(entry.sentiment!.confidence * 100),
-      emotions: entry.sentiment!.emotions || []
-    }))
-    .reverse()
+  const getSentimentIcon = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return <Smile className="h-4 w-4 text-green-500" />
+      case 'negative': return <Frown className="h-4 w-4 text-red-500" />
+      default: return <Meh className="h-4 w-4 text-amber-500" />
+    }
+  }
+
+  // Prepare chart data from server-provided moodGraph
+  const chartData = moodGraph.map(point => ({
+    date: new Date(point.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+    mood: point.avgScore * 100,
+    label: point.label
+  }))
 
   // Prepare mood distribution data for pie chart
-  const moodDistributionData = analytics ? [
-    { name: 'Positive', value: analytics.moodDistribution.positive, color: COLORS.positive },
-    { name: 'Neutral', value: analytics.moodDistribution.neutral, color: COLORS.neutral },
-    { name: 'Negative', value: analytics.moodDistribution.negative, color: COLORS.negative }
-  ] : []
+  const moodDistributionData = [
+    { name: 'Positive', value: insights.moodDistribution.positive, color: COLORS.positive },
+    { name: 'Neutral', value: insights.moodDistribution.neutral, color: COLORS.neutral },
+    { name: 'Negative', value: insights.moodDistribution.negative, color: COLORS.negative }
+  ]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 relative overflow-hidden">
@@ -345,7 +475,12 @@ export default function DashboardClient({ user }: DashboardClientProps) {
       <AnimatedBackground />
 
       {/* Fixed Header */}
-      <JournalHeader userEmail={user.email || ''} onSignOut={handleSignOut} />
+      <JournalHeader 
+        userEmail={user.email || ''} 
+        onSignOut={handleSignOut}
+        onSettingsOpen={() => setShowSettings(true)}
+        onNotificationsOpen={() => setShowNotifications(true)}
+      />
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -573,21 +708,45 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                             </div>
                           )}
 
-                          {entry.sentiment?.summary && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ 
-                                opacity: expandedEntry === entry.id ? 1 : 0, 
-                                height: expandedEntry === entry.id ? 'auto' : 0 
-                              }}
-                              transition={{ duration: 0.3 }}
-                              className="mt-3 p-3 bg-white/50 rounded-lg border border-white/30"
-                            >
-                              <p className="text-sm italic text-slate-600 dark:text-slate-400">
-                                <Brain className="h-4 w-4 inline mr-1" />
-                                AI Insight: {entry.sentiment.summary}
-                              </p>
-                            </motion.div>
+                          {/* Detected Emotion Section */}
+                          {entry.sentiment && (
+                            <div className="mt-3 p-3 rounded-lg border bg-slate-50 dark:bg-slate-900/50">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                                    Detected Emotion
+                                  </span>
+                                  <Badge 
+                                    variant="secondary"
+                                    className="text-xs px-2 py-0.5"
+                                    style={{
+                                      backgroundColor: getSentimentColor(entry.sentiment.label) + '20',
+                                      color: getSentimentColor(entry.sentiment.label),
+                                      borderColor: getSentimentColor(entry.sentiment.label)
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      {getSentimentIcon(entry.sentiment.label)}
+                                      <span className="capitalize">{entry.sentiment.label}</span>
+                                    </div>
+                                  </Badge>
+                                </div>
+                                <span className="text-xs text-slate-500">
+                                  {typeof entry.sentiment.confidence === 'number' && !isNaN(entry.sentiment.confidence) && entry.sentiment.confidence > 0
+                                    ? (entry.sentiment.confidence * 100).toFixed(0) + '%'
+                                    : '--%'
+                                  } confidence
+                                </span>
+                              </div>
+                              {(entry.sentiment.ai_feedback || entry.sentiment.summary) && (
+                                <p className="text-sm text-slate-700 dark:text-slate-300">
+                                  {entry.sentiment.ai_feedback || entry.sentiment.summary}
+                                </p>
+                              )}
+                              {!entry.sentiment.ai_feedback && !entry.sentiment.summary && (
+                                <p className="text-sm text-slate-500 italic">Analysis pending...</p>
+                              )}
+                            </div>
                           )}
                         </motion.div>
                       ))}
@@ -660,7 +819,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                                         {typeof data.confidence === 'number' && !isNaN(data.confidence) && data.confidence > 0 && (
                                           <p className="text-slate-600">Confidence: {data.confidence.toFixed(0)}%</p>
                                         )}
-                                        {data.emotions.length > 0 && (
+                                        {data.emotions && Array.isArray(data.emotions) && data.emotions.length > 0 && (
                                           <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
                                         )}
                                       </div>
@@ -694,77 +853,75 @@ export default function DashboardClient({ user }: DashboardClientProps) {
             </motion.div>
 
             {/* Progress Insights */}
-            {analytics && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-              >
-                <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="flex items-center text-lg text-slate-800 dark:text-slate-200">
-                      <Target className="h-5 w-5 text-blue-500 mr-2" />
-                      Your Progress Insights
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Weekly Stats */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          {analytics.weeklyEntries}
-                        </div>
-                        <div className="text-sm text-blue-600 dark:text-blue-400">Entries This Week</div>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-slate-800 dark:text-slate-200">
+                    <Target className="h-5 w-5 text-blue-500 mr-2" />
+                    Your Progress Insights
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Weekly Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {insights.weeklyEntries}
                       </div>
-                      <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {analytics.streak}
-                        </div>
-                        <div className="text-sm text-green-600 dark:text-green-400">Day Streak</div>
-                      </div>
+                      <div className="text-sm text-blue-600 dark:text-blue-400">Entries This Week</div>
                     </div>
+                    <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {insights.streak}
+                      </div>
+                      <div className="text-sm text-green-600 dark:text-green-400">Day Streak</div>
+                    </div>
+                  </div>
 
-                    {/* Mood Distribution */}
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Mood Distribution
-                      </h4>
-                      {moodDistributionData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={120}>
-                          <PieChart>
-                            <Pie
-                              data={moodDistributionData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={30}
-                              outerRadius={50}
-                              dataKey="value"
-                            >
-                              {moodDistributionData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="text-center py-4 text-slate-500">
-                          <p className="text-sm">No mood data yet</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Average Mood Score */}
-                    <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                      <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                        {Math.round(analytics.avgMoodScore * 100)}%
+                  {/* Mood Distribution */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Mood Distribution (Last 14 Days)
+                    </h4>
+                    {moodDistributionData.some(d => d.value > 0) ? (
+                      <ResponsiveContainer width="100%" height={120}>
+                        <PieChart>
+                          <Pie
+                            data={moodDistributionData.filter(d => d.value > 0)}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={30}
+                            outerRadius={50}
+                            dataKey="value"
+                          >
+                            {moodDistributionData.filter(d => d.value > 0).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-4 text-slate-500">
+                        <p className="text-sm">No mood data yet</p>
                       </div>
-                      <div className="text-sm text-purple-600 dark:text-purple-400">Average Mood Score</div>
+                    )}
+                  </div>
+
+                  {/* Average Mood Score */}
+                  <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      {Math.round(insights.avgMoodScore * 100)}%
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
+                    <div className="text-sm text-purple-600 dark:text-purple-400">Average Mood Score</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           </div>
         </div>
 
@@ -795,6 +952,92 @@ export default function DashboardClient({ user }: DashboardClientProps) {
       >
         <Plus className="h-6 w-6 text-white" />
       </motion.button>
+
+      {/* Settings Panel */}
+      <Sheet open={showSettings} onOpenChange={setShowSettings}>
+        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Settings
+            </SheetTitle>
+            <SheetDescription>
+              Manage your preferences and account settings
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6 space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">Account</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {user.email}
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">Data</h3>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    const dataStr = JSON.stringify(entries, null, 2)
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+                    const url = URL.createObjectURL(dataBlob)
+                    const link = document.createElement('a')
+                    link.href = url
+                    link.download = `mindmate-entries-${new Date().toISOString()}.json`
+                    document.body.appendChild(link)
+                    link.click()
+                    document.body.removeChild(link)
+                    URL.revokeObjectURL(url)
+                    toast.success('Entries exported successfully!')
+                  } catch (error) {
+                    toast.error('Failed to export entries')
+                  }
+                }}
+              >
+                Export My Data
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Notifications Panel */}
+      <Dialog open={showNotifications} onOpenChange={setShowNotifications}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Notifications
+            </DialogTitle>
+            <DialogDescription>
+              Recent activity and updates
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 space-y-3">
+            {entries.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No notifications yet. Start journaling to see your activity!
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg border bg-muted/50">
+                  <p className="text-sm font-medium">Welcome to MindMate AI</p>
+                  <p className="text-xs text-muted-foreground">
+                    You have {entries.length} journal {entries.length === 1 ? 'entry' : 'entries'}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg border bg-muted/50">
+                  <p className="text-sm font-medium">Analysis Complete</p>
+                  <p className="text-xs text-muted-foreground">
+                    Your latest entry has been analyzed
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
