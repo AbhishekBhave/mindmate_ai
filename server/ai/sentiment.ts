@@ -149,9 +149,58 @@ export class EnhancedSentimentAnalyzer {
           model: 'openai-gpt-4o-mini'
         }]
       }
-    } catch (error) {
-      console.error('OpenAI sentiment error:', error)
+    } catch (error: any) {
+      // Handle quota exceeded or other OpenAI errors gracefully
+      console.error('OpenAI sentiment error:', error?.message || error)
+      
+      // If it's a quota error, fall back to rule-based analysis
+      if (error?.code === 'insufficient_quota' || error?.message?.includes('quota')) {
+        console.warn('OpenAI quota exceeded, falling back to rule-based sentiment analysis')
+        return this.ruleBasedSentiment(content, emotions)
+      }
+      
       return null
+    }
+  }
+
+  // Fallback rule-based sentiment when OpenAI fails
+  private static ruleBasedSentiment(content: string, emotions: string[]): EnsembleResult {
+    const positiveWords = ['great', 'amazing', 'wonderful', 'happy', 'joy', 'love', 'excited', 'grateful', 'blessed', 'fantastic', 'excellent', 'perfect', 'good', 'better', 'best', 'success', 'achieved', 'proud', 'pleased', 'delighted', 'thrilled', 'ecstatic', 'content', 'satisfied']
+    const negativeWords = ['bad', 'terrible', 'horrible', 'awful', 'worst', 'hate', 'angry', 'frustrated', 'upset', 'sad', 'depressed', 'anxious', 'worried', 'stressed', 'overwhelmed', 'hurt', 'pain', 'difficult', 'struggling', 'failing', 'disappointed', 'betrayed', 'lonely', 'empty', 'hopeless', 'guilty', 'ashamed']
+    
+    const lowerContent = content.toLowerCase()
+    const positiveMatches = positiveWords.filter(word => lowerContent.includes(word)).length
+    const negativeMatches = negativeWords.filter(word => lowerContent.includes(word)).length
+    
+    let label: 'positive' | 'neutral' | 'negative' = 'neutral'
+    let score = 0.5
+    
+    if (positiveMatches > negativeMatches && positiveMatches >= 2) {
+      label = 'positive'
+      score = 0.6 + (Math.min(positiveMatches / 10, 0.3))
+    } else if (negativeMatches > positiveMatches && negativeMatches >= 2) {
+      label = 'negative'
+      score = 0.4 - (Math.min(negativeMatches / 10, 0.3))
+    } else if (positiveMatches > 0) {
+      label = 'positive'
+      score = 0.55
+    } else if (negativeMatches > 0) {
+      label = 'negative'
+      score = 0.45
+    }
+    
+    return {
+      finalScore: score,
+      finalLabel: label,
+      confidence: 0.6, // Lower confidence for rule-based
+      emotions,
+      modelResults: [{
+        score,
+        label,
+        confidence: 0.6,
+        emotions,
+        model: 'rule-based-fallback'
+      }]
     }
   }
 

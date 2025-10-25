@@ -111,21 +111,42 @@ Guidelines:
 - Keep recommendations practical and achievable
 - Confidence should reflect how clear the patterns are across entries`
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a compassionate AI companion that provides deep, personalized insights about emotional patterns and personal growth. Always respond with valid JSON in the exact format requested.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 800,
-    })
+    let completion
+    try {
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a compassionate AI companion that provides deep, personalized insights about emotional patterns and personal growth. Always respond with valid JSON in the exact format requested.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 800,
+      })
+    } catch (error: any) {
+      // Handle quota exceeded error gracefully
+      if (error?.code === 'insufficient_quota' || error?.message?.includes('quota')) {
+        console.warn('OpenAI quota exceeded for deep analysis, returning fallback')
+        return NextResponse.json({
+          ok: true,
+          data: {
+            emotionalPatterns: 'Based on your entries, you\'re actively engaging in self-reflection. This regular journaling practice is already showing value in building emotional awareness.',
+            growthAreas: 'Consider exploring recurring themes in your entries and how they relate to your goals and values.',
+            strengths: 'Your commitment to journaling demonstrates self-awareness and a desire for personal growth. This is a significant strength.',
+            challenges: 'As you continue this practice, you may discover deeper patterns that require attention and care.',
+            recommendations: 'Keep a consistent journaling routine, try to identify patterns across entries, and consider how different emotions relate to specific situations.',
+            insightSummary: 'Your journey of self-reflection shows dedication to personal growth. Continue exploring your thoughts and feelings, and remember that small daily reflections can lead to meaningful insights over time.',
+            confidence: 40
+          }
+        })
+      }
+      throw error
+    }
 
     const responseText = completion.choices[0]?.message?.content
     if (!responseText) {

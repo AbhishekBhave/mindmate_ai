@@ -52,21 +52,40 @@ Guidelines:
 - Provide insights that help the user understand their emotional patterns
 - Suggest concrete steps for growth and improvement`
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a supportive AI companion that analyzes journal entries and provides gentle, helpful suggestions. Always respond with valid JSON in the exact format requested.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 300,
-    })
+    let completion
+    try {
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a supportive AI companion that analyzes journal entries and provides gentle, helpful suggestions. Always respond with valid JSON in the exact format requested.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 300,
+      })
+    } catch (error: any) {
+      // Handle quota exceeded error gracefully
+      if (error?.code === 'insufficient_quota' || error?.message?.includes('quota')) {
+        console.warn('OpenAI quota exceeded, using fallback analysis')
+        return NextResponse.json({
+          sentiment: 'neutral',
+          confidence: 70,
+          suggestion: 'I appreciate you sharing your thoughts. Taking time to reflect is valuable for emotional well-being.',
+          emotions: ['reflective'],
+          insights: ['Regular journaling helps build emotional awareness', 'Writing about experiences provides clarity'],
+          suggestions: ['Consider what patterns you notice in your entries', 'Try to identify what triggers different emotions', 'Practice gratitude by noting positive moments'],
+          patterns: ['Active reflection on experiences'],
+          growthAreas: ['Emotional awareness', 'Self-reflection skills']
+        })
+      }
+      throw error
+    }
 
     const responseText = completion.choices[0]?.message?.content
     if (!responseText) {
