@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/server/supabase/admin'
 import { summarizeText } from '@/server/ai/openai'
-import { scoreSentiment } from '@/server/ai/sentiment'
+import { scoreSentiment, analyzeSentimentEnhanced } from '@/server/ai/sentiment'
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,21 +40,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Analyze the entry with AI
+    // Analyze the entry with enhanced AI
     try {
       const [summaryResult, sentimentResult] = await Promise.all([
         summarizeText(content),
-        scoreSentiment(content)
+        analyzeSentimentEnhanced(content)
       ])
 
-      // Save sentiment analysis
+      // Save enhanced sentiment analysis
       const { error: sentimentError } = await supabaseAdmin
         .from('sentiments')
         .insert({
           entry_id: entry.id,
-          score: sentimentResult.score,
-          label: sentimentResult.label,
-          summary: summaryResult.summary
+          score: sentimentResult.finalScore,
+          label: sentimentResult.finalLabel,
+          summary: summaryResult.summary,
+          confidence: sentimentResult.confidence,
+          emotions: sentimentResult.emotions,
+          model_results: sentimentResult.modelResults
         })
 
       if (sentimentError) {
@@ -67,7 +70,13 @@ export async function POST(request: NextRequest) {
           entry,
           analysis: {
             summary: summaryResult.summary,
-            sentiment: sentimentResult
+            sentiment: {
+              score: sentimentResult.finalScore,
+              label: sentimentResult.finalLabel,
+              confidence: sentimentResult.confidence,
+              emotions: sentimentResult.emotions,
+              modelResults: sentimentResult.modelResults
+            }
           }
         }
       })

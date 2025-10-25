@@ -1,16 +1,17 @@
 'use client'
 
-// WARNING: This is a complete dashboard redesign for glassmorphic UI
-// All database operations, authentication, and entry saving functionality are preserved
-// Only the UI presentation has been transformed
-
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Mic, Plus, Edit2, Trash2, Search, TrendingUp, Clock } from 'lucide-react'
+import { 
+  Send, Plus, Edit2, Trash2, TrendingUp, Calendar, Clock, Heart, 
+  Brain, Sparkles, Target, BookOpen, BarChart3, Users, Settings,
+  ChevronDown, ChevronUp, Eye, EyeOff
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
@@ -18,21 +19,45 @@ import { JournalHeader } from '@/components/dashboard/JournalHeader'
 import { AnimatedBackground } from '@/components/dashboard/AnimatedBackground'
 import { AIInsightsSection } from '@/components/dashboard/AIInsightsSection'
 import { DashboardAnalyzer } from '@/components/dashboard/DashboardAnalyzer'
-import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart } from 'recharts'
 
 interface Entry {
   id: string
   content: string
   created_at: string
+  word_count?: number
+  reading_time?: number
   sentiment?: {
     score: number
     label: string
+    confidence: number
+    emotions?: string[]
     summary?: string
   }
 }
 
+interface AnalyticsData {
+  weeklyEntries: number
+  avgMoodScore: number
+  moodDistribution: { positive: number; neutral: number; negative: number }
+  emotionsDetected: string[]
+  streak: number
+  totalWords: number
+}
+
 interface DashboardClientProps {
   user: SupabaseUser
+}
+
+const COLORS = {
+  positive: '#10B981', // emerald-500
+  neutral: '#F59E0B', // amber-500
+  negative: '#EF4444', // red-500
+  background: {
+    positive: '#ECFDF5', // emerald-50
+    neutral: '#FFFBEB', // amber-50
+    negative: '#FEF2F2' // red-50
+  }
 }
 
 export default function DashboardClient({ user }: DashboardClientProps) {
@@ -40,45 +65,34 @@ export default function DashboardClient({ user }: DashboardClientProps) {
   const [newEntry, setNewEntry] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'idle'>('idle')
-  const [characterCount, setCharacterCount] = useState(0)
   const [placeholderText, setPlaceholderText] = useState('How are you feeling today? What\'s on your mind?')
-  const [lastAnalysis, setLastAnalysis] = useState<{
-    sentiment: string
-    confidence: number
-    suggestion: string
-    emotions: string[]
-    insights: string[]
-    suggestions: string[]
-    patterns: string[]
-    growthAreas: string[]
-  } | null>(null)
+  const [lastAnalysis, setLastAnalysis] = useState<any>(null)
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
+  const [showMoodChart, setShowMoodChart] = useState(true)
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
 
-  const moods = ['😊', '😔', '😐', '😡', '😰', '😴']
   const suggestedPrompts = [
     'What made you smile today?',
     'Describe a challenge you overcame',
     'What are you grateful for?',
-    'How are you feeling right now?',
-    'What lesson did you learn today?'
+    'How did you feel about your interactions today?',
+    'What is one thing you want to achieve tomorrow?',
+    'Reflect on a recent success or learning experience.',
   ]
 
   useEffect(() => {
     if (user?.id) {
       fetchEntries(user.id)
+      fetchAnalytics(user.id)
     }
   }, [user])
 
   useEffect(() => {
-    setCharacterCount(newEntry.length)
-  }, [newEntry])
-
-  // Auto-resize textarea
-  useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
     }
   }, [newEntry])
 
@@ -86,15 +100,57 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     try {
       const response = await fetch(`/api/entries?userId=${userId}`)
       const data = await response.json()
-      
+
       if (data.ok) {
         setEntries(data.data || [])
+        if (data.data && data.data.length > 0) {
+          updateLastAnalysis(data.data[0].sentiment)
+        }
       } else {
         toast.error('Failed to fetch entries')
       }
     } catch {
       toast.error('Failed to fetch entries')
     }
+  }
+
+  const fetchAnalytics = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/analytics?userId=${userId}`)
+      const data = await response.json()
+
+      if (data.ok) {
+        setAnalytics(data.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error)
+    }
+  }
+
+  const updateLastAnalysis = (sentiment: Entry['sentiment']) => {
+    if (!sentiment) {
+      setLastAnalysis(null)
+      return
+    }
+
+    setLastAnalysis({
+      sentiment: sentiment.label,
+      confidence: sentiment.confidence,
+      suggestion: sentiment.summary || 'Ready for today\'s reflection? I\'m here to listen.',
+      emotions: sentiment.emotions || ['Reflective'],
+      insights: [
+        `Your entry shows ${sentiment.label} emotional patterns with ${Math.round(sentiment.confidence * 100)}% confidence.`,
+        'This type of reflection demonstrates emotional awareness and self-reflection skills.',
+        'Consider how these feelings might be connected to recent events or ongoing situations.'
+      ],
+      suggestions: [
+        'Consider reflecting on what brought you to write this entry today.',
+        'Think about how you can maintain or improve your current emotional state.',
+        'Practice gratitude for the positive aspects of your day.'
+      ],
+      patterns: ['Clear emotional expression with good self-awareness'],
+      growthAreas: ['Regular reflection practice to build emotional intelligence']
+    })
   }
 
   const handleSubmitEntry = async (e: React.FormEvent) => {
@@ -156,11 +212,12 @@ export default function DashboardClient({ user }: DashboardClientProps) {
         }
 
         toast.success('Entry saved successfully! 🎉', {
-          description: 'Your thoughts have been recorded',
+          description: 'Your thoughts have been recorded and analyzed',
         })
         setNewEntry('')
         setAutoSaveStatus('saved')
         fetchEntries(user.id)
+        fetchAnalytics(user.id)
         
         // Reset status after 2 seconds
         setTimeout(() => setAutoSaveStatus('idle'), 2000)
@@ -202,16 +259,29 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
 
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
-    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
-    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
-    return date.toLocaleDateString()
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    return `${diffDays}d ago`
   }
 
-  const getMoodEmoji = (sentiment?: { label: string }) => {
-    if (!sentiment) return '😐'
-    switch (sentiment.label) {
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return COLORS.positive
+      case 'negative': return COLORS.negative
+      default: return COLORS.neutral
+    }
+  }
+
+  const getSentimentBackground = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return COLORS.background.positive
+      case 'negative': return COLORS.background.negative
+      default: return COLORS.background.neutral
+    }
+  }
+
+  const getSentimentEmoji = (sentiment: string) => {
+    switch (sentiment) {
       case 'positive': return '😊'
       case 'negative': return '😔'
       default: return '😐'
@@ -224,30 +294,23 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     .slice(0, 30)
     .map(entry => ({
       date: new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      mood: Math.max(0, Math.min(100, entry.sentiment!.score * 100)) // Ensure mood is between 0-100
+      mood: Math.max(0, Math.min(100, entry.sentiment!.score * 100)),
+      confidence: Math.round(entry.sentiment!.confidence * 100),
+      emotions: entry.sentiment!.emotions || []
     }))
     .reverse()
 
-  // Calculate stats
-  const streak = 5 // This would come from database in real app
-  const totalEntries = entries.length
-  const validSentimentEntries = entries.filter(e => e.sentiment && typeof e.sentiment.score === 'number' && !isNaN(e.sentiment.score))
-  const avgMood = validSentimentEntries.length > 0 
-    ? validSentimentEntries.reduce((acc, e) => acc + (e.sentiment!.score * 100), 0) / validSentimentEntries.length
-    : 0
+  // Prepare mood distribution data for pie chart
+  const moodDistributionData = analytics ? [
+    { name: 'Positive', value: analytics.moodDistribution.positive, color: COLORS.positive },
+    { name: 'Neutral', value: analytics.moodDistribution.neutral, color: COLORS.neutral },
+    { name: 'Negative', value: analytics.moodDistribution.negative, color: COLORS.negative }
+  ] : []
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-800 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 relative overflow-hidden">
       {/* Animated Background */}
       <AnimatedBackground />
-
-      {/* Gradient Background Mesh */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3CradialGradient id='a' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='%23B794F6' stop-opacity='0.1'/%3E%3Cstop offset='100%25' stop-color='%23B794F6' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='100' height='100' fill='url(%23a)'/%3E%3C/svg%3E")`,
-          backgroundSize: '200px 200px',
-        }} />
-      </div>
 
       {/* Fixed Header */}
       <JournalHeader userEmail={user.email || ''} onSignOut={handleSignOut} />
@@ -257,271 +320,410 @@ export default function DashboardClient({ user }: DashboardClientProps) {
         {/* AI Insights Section */}
         <AIInsightsSection entries={entries} lastAnalysis={lastAnalysis} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Main Entry Section */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="lg:col-span-1"
-          >
-            <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-[0_0_40px_rgba(183,148,246,0.4)] hover:shadow-[0_0_50px_rgba(183,148,246,0.5)] transition-all duration-300">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Share your thoughts</h2>
-
-              {/* Entry Form */}
-              <form onSubmit={handleSubmitEntry} className="space-y-4">
-                <div className="relative">
-                  <Textarea
-                    ref={textareaRef}
-                    placeholder={placeholderText}
-                    value={newEntry}
-                    onChange={(e) => setNewEntry(e.target.value)}
-                    className="backdrop-blur-sm bg-white/5 border-white/20 focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all duration-300 min-h-[200px]"
-                    required
-                  />
-                  
-                  {/* Character counter */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: characterCount > 0 ? 1 : 0 }}
-                    className="absolute bottom-3 right-3 text-xs text-gray-500 dark:text-gray-400"
-                  >
-                    {characterCount}
-                  </motion.div>
-                </div>
-
-                {/* Suggested Prompts */}
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-                  {suggestedPrompts.map((prompt, index) => (
-                    <motion.button
-                      key={prompt}
-                      type="button"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 + index * 0.1 }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handlePromptClick(prompt)}
-                      className="px-4 py-2 rounded-full backdrop-blur-sm bg-white/10 border border-white/20 hover:bg-white/20 transition-all duration-300 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
-                    >
-                      {prompt}
-                    </motion.button>
-                  ))}
-                </div>
-
-                {/* Auto-save indicator */}
-                <AnimatePresence>
-                  {autoSaveStatus === 'saving' && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-sm text-gray-500 dark:text-gray-400"
-                    >
-                      Saving...
-                    </motion.p>
-                  )}
-                  {autoSaveStatus === 'saved' && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-sm text-green-500"
-                    >
-                      ✓ Saved successfully!
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-xl backdrop-blur-xl shadow-[0_0_20px_rgba(183,148,246,0.3)] hover:shadow-[0_0_30px_rgba(183,148,246,0.5)] transition-all duration-300 py-3 text-lg font-semibold relative overflow-hidden group"
-                  >
-                    {isLoading ? 'Saving...' : (
-                      <>
-                        <Send className="h-5 w-5 inline mr-2" />
-                        Save Entry
-                      </>
-                    )}
-                    <span className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
-                  </Button>
-                </motion.div>
-              </form>
-            </div>
-          </motion.div>
-
-          {/* Chart and Stats */}
-          <div className="space-y-6">
-            {/* Mood Chart */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-              className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(183,148,246,0.2)]"
-            >
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Mood Over Time</h3>
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#9333EA" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#9333EA" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                    <XAxis dataKey="date" stroke="rgba(156,163,175,0.8)" />
-                    <YAxis stroke="rgba(156,163,175,0.8)" />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const value = payload[0].value
-                          const displayValue = typeof value === 'number' && !isNaN(value) ? `${value.toFixed(1)}%` : 'N/A'
-                          return (
-                            <div className="bg-black/80 border border-white/20 rounded-lg p-3 text-white">
-                              <p className="font-semibold">{label}</p>
-                              <p className="text-purple-300">Mood: {displayValue}</p>
-                            </div>
-                          )
-                        }
-                        return null
-                      }}
-                      contentStyle={{
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: '8px'
-                      }}
-                    />
-                    <Area type="monotone" dataKey="mood" stroke="#9333EA" fill="url(#colorMood)" strokeWidth={2} />
-                    <Line type="monotone" dataKey="mood" stroke="#9333EA" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[250px] flex items-center justify-center text-gray-500">
-                  <p>Start writing to see your mood chart!</p>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Stats Panel */}
+        {/* Two-Column Layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+          {/* Left Column - Entry Creation */}
+          <div className="xl:col-span-2 space-y-6">
+            {/* Create New Entry Card */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.7 }}
-              className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(183,148,246,0.2)]"
+              transition={{ duration: 0.6 }}
             >
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Progress</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.8, type: 'spring' }}
-                    className="text-3xl mb-2"
-                  >
-                    🔥
-                  </motion.div>
-                  <div className="text-2xl font-bold text-purple-600">{streak}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Day streak</div>
-                </div>
-                <div className="text-center">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.9, type: 'spring' }}
-                    className="text-3xl mb-2"
-                  >
-                    📝
-                  </motion.div>
-                  <div className="text-2xl font-bold text-purple-600">{totalEntries}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Total entries</div>
-                </div>
-                <div className="text-center">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 1.0, type: 'spring' }}
-                    className="text-3xl mb-2"
-                  >
-                    😊
-                  </motion.div>
-                  <div className="text-2xl font-bold text-purple-600">{Math.round(avgMood)}%</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Avg mood</div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
+              <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl hover:shadow-2xl transition-all duration-300">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-2xl text-slate-800 dark:text-slate-200">
+                    <Heart className="h-6 w-6 text-pink-500 mr-3" />
+                    Share Your Thoughts
+                  </CardTitle>
+                  <CardDescription className="text-slate-600 dark:text-slate-400">
+                    Express yourself freely. Your AI companion is here to listen and provide gentle guidance.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmitEntry} className="space-y-4">
+                    <div className="relative">
+                      <Textarea
+                        ref={textareaRef}
+                        placeholder={placeholderText}
+                        value={newEntry}
+                        onChange={(e) => setNewEntry(e.target.value)}
+                        className="min-h-[200px] resize-none border-slate-200 focus:border-pink-300 focus:ring-pink-200 transition-all duration-300"
+                        required
+                      />
+                      
+                      {/* Character counter */}
+                      <div className="absolute bottom-3 right-3 text-xs text-slate-500">
+                        {newEntry.length} characters
+                      </div>
+                    </div>
 
-        {/* Recent Entries */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.8 }}
-          className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(183,148,246,0.2)]"
-        >
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Recent Entries</h3>
-          
-          {entries.length > 0 ? (
-            <div className="space-y-4">
-              {entries.slice(0, 5).map((entry, index) => (
-                <motion.div
-                  key={entry.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.9 + index * 0.1 }}
-                  whileHover={{
-                    boxShadow: '0 0 30px rgba(147, 51, 234, 0.5)',
-                    scale: 1.01
-                  }}
-                  className="backdrop-blur-sm bg-white/5 border border-white/10 hover:border-white/20 rounded-xl p-4 transition-all duration-300 group"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{getMoodEmoji(entry.sentiment)}</span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {getTimeAgo(entry.created_at)}
-                      </span>
+                    {/* Suggested Prompts */}
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Quick prompts:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedPrompts.slice(0, 3).map((prompt, index) => (
+                          <motion.button
+                            key={index}
+                            type="button"
+                            onClick={() => handlePromptClick(prompt)}
+                            className="px-3 py-1 text-sm bg-slate-100 hover:bg-pink-100 text-slate-700 rounded-full transition-colors duration-200"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {prompt}
+                          </motion.button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <button className="p-1 rounded-lg hover:bg-white/10">
-                        <Edit2 className="h-4 w-4 text-gray-500" />
-                      </button>
-                      <button className="p-1 rounded-lg hover:bg-red-50/10">
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </button>
+
+                    {/* Auto-save status */}
+                    <AnimatePresence>
+                      {autoSaveStatus === 'saving' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="text-sm text-slate-500"
+                        >
+                          Saving...
+                        </motion.div>
+                      )}
+                      {autoSaveStatus === 'saved' && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="text-sm text-green-600"
+                        >
+                          ✓ Saved successfully!
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                      >
+                        {isLoading ? (
+                          <>
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity }}
+                              className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full mr-2"
+                            />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-5 w-5 mr-2" />
+                            Save & Analyze Entry
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </form>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Recent Entries */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-xl text-slate-800 dark:text-slate-200">
+                    <BookOpen className="h-5 w-5 text-blue-500 mr-3" />
+                    Recent Entries
+                  </CardTitle>
+                  <CardDescription className="text-slate-600 dark:text-slate-400">
+                    Your emotional journey over time
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {entries.length > 0 ? (
+                    <div className="space-y-4">
+                      {entries.slice(0, 5).map((entry, index) => (
+                        <motion.div
+                          key={entry.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                          className={`p-4 rounded-xl border transition-all duration-300 hover:shadow-lg ${
+                            expandedEntry === entry.id ? 'shadow-lg' : 'shadow-sm'
+                          }`}
+                          style={{
+                            backgroundColor: entry.sentiment ? getSentimentBackground(entry.sentiment.label) : '#F8FAFC',
+                            borderColor: entry.sentiment ? getSentimentColor(entry.sentiment.label) : '#E2E8F0'
+                          }}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center space-x-3">
+                              <span className="text-2xl">{getSentimentEmoji(entry.sentiment?.label || 'neutral')}</span>
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    {getTimeAgo(entry.created_at)}
+                                  </span>
+                                  {entry.sentiment && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="text-xs"
+                                      style={{ 
+                                        backgroundColor: getSentimentColor(entry.sentiment.label) + '20',
+                                        color: getSentimentColor(entry.sentiment.label)
+                                      }}
+                                    >
+                                      {Math.round(entry.sentiment.confidence * 100)}% confidence
+                                    </Badge>
+                                  )}
+                                </div>
+                                {entry.word_count && (
+                                  <div className="text-xs text-slate-500">
+                                    {entry.word_count} words • {entry.reading_time}s read
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
+                              >
+                                {expandedEntry === entry.id ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <p className={`text-slate-700 dark:text-slate-300 ${
+                            expandedEntry === entry.id ? '' : 'line-clamp-2'
+                          }`}>
+                            {entry.content}
+                          </p>
+
+                          {entry.sentiment?.emotions && entry.sentiment.emotions.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1">
+                              {entry.sentiment.emotions.map((emotion, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs">
+                                  {emotion}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+
+                          {entry.sentiment?.summary && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ 
+                                opacity: expandedEntry === entry.id ? 1 : 0, 
+                                height: expandedEntry === entry.id ? 'auto' : 0 
+                              }}
+                              transition={{ duration: 0.3 }}
+                              className="mt-3 p-3 bg-white/50 rounded-lg border border-white/30"
+                            >
+                              <p className="text-sm italic text-slate-600 dark:text-slate-400">
+                                <Brain className="h-4 w-4 inline mr-1" />
+                                AI Insight: {entry.sentiment.summary}
+                              </p>
+                            </motion.div>
+                          )}
+                        </motion.div>
+                      ))}
                     </div>
-                  </div>
-                  <p className="text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">{entry.content}</p>
-                  {entry.sentiment?.summary && (
-                    <div className="mt-2 px-3 py-2 rounded-lg bg-purple-100/20 dark:bg-purple-900/20 border border-purple-200/30 dark:border-purple-700/30">
-                      <p className="text-sm italic text-purple-700 dark:text-purple-300">
-                        AI Insight: {entry.sentiment.summary}
-                      </p>
+                  ) : (
+                    <div className="text-center py-12 text-slate-500">
+                      <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg mb-2">No entries yet</p>
+                      <p className="text-sm">Start writing your first entry above!</p>
                     </div>
                   )}
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              <p className="text-lg mb-2">No entries yet</p>
-              <p className="text-sm">Start writing your first entry above!</p>
-            </div>
-          )}
-        </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+
+          {/* Right Column - Insights & Analytics */}
+          <div className="space-y-6">
+            {/* Mood Trend Chart */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center text-lg text-slate-800 dark:text-slate-200">
+                      <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+                      Mood Trend
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMoodChart(!showMoodChart)}
+                    >
+                      {showMoodChart ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <AnimatePresence>
+                    {showMoodChart && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        {chartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <AreaChart data={chartData}>
+                              <defs>
+                                <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="date" stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
+                              <YAxis domain={[0, 100]} stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 116, 139, 0.1)" />
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0].payload
+                                    return (
+                                      <div className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg p-3 shadow-lg">
+                                        <p className="font-semibold text-slate-800">{label}</p>
+                                        <p className="text-purple-600">Mood: {data.mood.toFixed(1)}%</p>
+                                        <p className="text-slate-600">Confidence: {data.confidence}%</p>
+                                        {data.emotions.length > 0 && (
+                                          <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
+                                        )}
+                                      </div>
+                                    )
+                                  }
+                                  return null
+                                }}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="mood" 
+                                stroke="#8B5CF6" 
+                                fill="url(#colorMood)" 
+                                strokeWidth={2}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[200px] flex items-center justify-center text-slate-500">
+                            <div className="text-center">
+                              <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p className="text-sm">Start journaling to see your mood trend!</p>
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Progress Insights */}
+            {analytics && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+              >
+                <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-lg text-slate-800 dark:text-slate-200">
+                      <Target className="h-5 w-5 text-blue-500 mr-2" />
+                      Your Progress Insights
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Weekly Stats */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                          {analytics.weeklyEntries}
+                        </div>
+                        <div className="text-sm text-blue-600 dark:text-blue-400">Entries This Week</div>
+                      </div>
+                      <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {analytics.streak}
+                        </div>
+                        <div className="text-sm text-green-600 dark:text-green-400">Day Streak</div>
+                      </div>
+                    </div>
+
+                    {/* Mood Distribution */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Mood Distribution
+                      </h4>
+                      {moodDistributionData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={120}>
+                          <PieChart>
+                            <Pie
+                              data={moodDistributionData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={30}
+                              outerRadius={50}
+                              dataKey="value"
+                            >
+                              {moodDistributionData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="text-center py-4 text-slate-500">
+                          <p className="text-sm">No mood data yet</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Average Mood Score */}
+                    <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                        {Math.round(analytics.avgMoodScore * 100)}%
+                      </div>
+                      <div className="text-sm text-purple-600 dark:text-purple-400">Average Mood Score</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </div>
+        </div>
 
         {/* Deep AI Analysis Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 1.0 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
           className="mt-8"
         >
           <DashboardAnalyzer 
@@ -531,19 +733,19 @@ export default function DashboardClient({ user }: DashboardClientProps) {
             }}
           />
         </motion.div>
-
-        {/* Floating Action Button */}
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          className="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 shadow-lg hover:shadow-xl flex items-center justify-center z-50"
-          onClick={() => textareaRef.current?.focus()}
-        >
-          <Plus className="h-6 w-6 text-white" />
-        </motion.button>
       </main>
+
+      {/* Floating Action Button */}
+      <motion.button
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        className="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 shadow-lg hover:shadow-xl flex items-center justify-center z-50"
+        onClick={() => textareaRef.current?.focus()}
+      >
+        <Plus className="h-6 w-6 text-white" />
+      </motion.button>
     </div>
   )
 }
