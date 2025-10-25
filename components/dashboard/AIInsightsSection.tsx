@@ -134,7 +134,9 @@ export function AIInsightsSection({ entries, lastAnalysis }: AIInsightsSectionPr
                 {displayAnalysis.sentiment} Mood
               </span>
             </span>
-            <span>{displayAnalysis.confidence}% confidence</span>
+            {typeof displayAnalysis.confidence === 'number' && !isNaN(displayAnalysis.confidence) && displayAnalysis.confidence > 0 && (
+              <span>{displayAnalysis.confidence.toFixed(0)}% confidence</span>
+            )}
           </div>
         </div>
       </div>

@@ -36,27 +36,12 @@ export function DashboardAnalyzer({ onAnalysisComplete }: DashboardAnalyzerProps
     setIsAnalyzing(true)
     
     try {
-      // Get current user ID from localStorage or context
-      const userData = localStorage.getItem('user')
-      if (!userData) {
-        toast.error('Please sign in to run deep analysis')
-        return
-      }
-
-      const user = JSON.parse(userData)
-      if (!user.id) {
-        toast.error('User ID not found')
-        return
-      }
-
+      // Call the API without sending userId - it will be resolved server-side from cookies
       const response = await fetch('/api/deep-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: user.id
-        }),
       })
 
       const data = await response.json()
@@ -71,7 +56,11 @@ export function DashboardAnalyzer({ onAnalysisComplete }: DashboardAnalyzerProps
           duration: 4000
         })
       } else {
-        toast.error(data.error || 'Failed to run deep analysis')
+        if (data.error?.includes('Unauthorized')) {
+          toast.error('Please sign in to run deep analysis')
+        } else {
+          toast.error(data.error || 'Failed to run deep analysis')
+        }
       }
     } catch (error) {
       console.error('Deep analysis error:', error)

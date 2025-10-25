@@ -101,39 +101,108 @@ export class EnhancedSentimentAnalyzer {
   ]
 
   static async analyzeSentiment(content: string): Promise<EnsembleResult> {
-    const preprocessedText = TextPreprocessor.preprocess(content)
-    const sentences = TextPreprocessor.splitIntoSentences(content)
     const emotions = TextPreprocessor.extractEmotions(content)
 
-    // Analyze with multiple models
-    const modelResults: SentimentResult[] = []
-    
-    for (const model of this.MODELS) {
+    // Use OpenAI for sentiment analysis (more reliable)
+    if (process.env.OPENAI_API_KEY) {
       try {
-        const result = await this.analyzeWithModel(preprocessedText, model)
+        const result = await this.analyzeWithOpenAI(content, emotions)
         if (result) {
-          modelResults.push(result)
+          return result
         }
       } catch (error) {
-        console.error(`Model ${model.name} failed:`, error)
-        // Continue with other models
+        console.error('OpenAI sentiment analysis failed:', error)
       }
     }
 
-    // If all models fail, use fallback
-    if (modelResults.length === 0) {
-      const fallbackResult = this.fallbackSentimentAnalysis(content)
+    // Fallback to basic analysis
+    const fallbackResult = this.fallbackSentimentAnalysis(content)
+    return {
+      finalScore: fallbackResult.score,
+      finalLabel: fallbackResult.label,
+      confidence: 0.3,
+      emotions,
+      modelResults: [fallbackResult]
+    }
+  }
+
+  private static async analyzeWithOpenAI(content: string, emotions: string[]): Promise<EnsembleResult | null> {
+    try {
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a sentiment analysis expert. Analyze the emotional tone of the journal entry and respond with valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: `Analyze this journal entry's sentiment:
+
+"${content}"
+
+Respond with JSON:
+{
+  "sentiment": "positive" or "negative" or "neutral",
+  "confidence": 0-1 (decimal),
+  "reasoning": "brief explanation"
+}`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      })
+
+      const text = response.choices[0]?.message?.content
+      if (!text) return null
+
+      // Parse JSON response
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        // Try to extract JSON if wrapped in markdown
+        const jsonMatch = text.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0])
+        } else {
+          return null
+        }
+      }
+
+      const sentiment = parsed.sentiment?.toLowerCase() || 'neutral'
+      const label = sentiment.includes('positive') ? 'positive' 
+        : sentiment.includes('negative') ? 'negative' 
+        : 'neutral'
+      
+      let confidence = typeof parsed.confidence === 'number' 
+        ? Math.max(0, Math.min(1, parsed.confidence))
+        : 0.7
+
+      // Adjust confidence based on label
+      if (label === 'neutral') confidence = 0.6
+      else if (confidence < 0.5) confidence = 0.5
+
       return {
-        finalScore: fallbackResult.score,
-        finalLabel: fallbackResult.label,
-        confidence: 0.3, // Low confidence for fallback
+        finalScore: label === 'positive' ? 0.8 : label === 'negative' ? 0.2 : 0.5,
+        finalLabel: label,
+        confidence,
         emotions,
-        modelResults: [fallbackResult]
+        modelResults: [{
+          score: label === 'positive' ? 0.8 : label === 'negative' ? 0.2 : 0.5,
+          label,
+          confidence,
+          emotions,
+          model: 'openai-gpt-4o-mini'
+        }]
       }
+    } catch (error) {
+      console.error('OpenAI sentiment error:', error)
+      return null
     }
-
-    // Calculate ensemble result
-    return this.calculateEnsembleResult(modelResults, emotions)
   }
 
   private static async analyzeWithModel(
@@ -157,15 +226,49 @@ export class EnhancedSentimentAnalyzer {
         }
       )
 
-      const data = response.data[0] as HuggingFaceResponse[]
+      // Handle different response shapes: array of arrays or array of objects
+      let data: HuggingFaceResponse[] = []
+      
+      if (Array.isArray(response.data)) {
+        if (response.data.length > 0 && Array.isArray(response.data[0])) {
+          // Flatten nested arrays: [[{label, score}, {label, score}], ...]
+          data = response.data.flat()
+        } else if (response.data[0] && typeof response.data[0] === 'object') {
+          // Already array of objects: [{label, score}, {label, score}]
+          data = response.data as HuggingFaceResponse[]
+        }
+      }
+
       if (data && data.length > 0) {
-        const result = data[0]
-        const mappedLabel = this.mapLabel(result.label, model.name)
+        // Find the result with highest score
+        const sortedData = [...data].sort((a, b) => {
+          const scoreA = typeof a.score === 'number' ? a.score : 0
+          const scoreB = typeof b.score === 'number' ? b.score : 0
+          return scoreB - scoreA
+        })
+        
+        const topResult = sortedData[0]
+        const mappedLabel = this.mapLabel(topResult.label, model.name)
+        
+        // Parse and validate score
+        let score = 0.5
+        let confidence = 0.5
+        
+        if (typeof topResult.score === 'number') {
+          score = Math.max(0, Math.min(1, topResult.score))
+          confidence = score
+        } else if (typeof topResult.score === 'string') {
+          const parsed = Number.parseFloat(topResult.score)
+          if (!isNaN(parsed)) {
+            score = Math.max(0, Math.min(1, parsed))
+            confidence = score
+          }
+        }
         
         return {
-          score: result.score,
+          score,
           label: mappedLabel,
-          confidence: result.score,
+          confidence,
           emotions: [],
           model: model.name
         }
@@ -207,14 +310,30 @@ export class EnhancedSentimentAnalyzer {
 
     for (const result of results) {
       const weight = this.getModelWeight(result.model)
-      weightedScore += result.score * weight
+      
+      // Validate and clamp scores
+      const validScore = typeof result.score === 'number' && !isNaN(result.score)
+        ? Math.max(0, Math.min(1, result.score))
+        : 0.5
+      
+      const validConfidence = typeof result.confidence === 'number' && !isNaN(result.confidence)
+        ? Math.max(0, Math.min(1, result.confidence))
+        : 0.5
+      
+      weightedScore += validScore * weight
       totalWeight += weight
-      confidenceSum += result.confidence
+      confidenceSum += validConfidence
       labelVotes[result.label] += weight
     }
 
-    const finalScore = weightedScore / totalWeight
-    const averageConfidence = confidenceSum / results.length
+    // Calculate final score and confidence, guard against division by zero
+    const finalScore = totalWeight > 0 
+      ? Math.max(0, Math.min(1, weightedScore / totalWeight))
+      : 0.5
+    
+    const averageConfidence = results.length > 0 
+      ? Math.max(0, Math.min(1, confidenceSum / results.length))
+      : 0.5
 
     // Determine final label by weighted voting
     const finalLabel = Object.entries(labelVotes)

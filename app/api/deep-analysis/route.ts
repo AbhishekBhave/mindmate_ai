@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/server/supabase/admin'
 import OpenAI from 'openai'
 
@@ -8,18 +9,22 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json()
-
-    if (!userId) {
+    // Authenticate the request using cookies
+    const supabase = await createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session) {
       return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
+        { ok: false, error: 'Unauthorized. Please sign in.' },
+        { status: 401 }
       )
     }
 
+    const userId = session.user.id
+
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { ok: false, error: 'OpenAI API key not configured' },
         { status: 500 }
       )
     }
@@ -33,6 +38,7 @@ export async function POST(request: NextRequest) {
         sentiment:sentiments(
           label,
           score,
+          confidence,
           emotions,
           summary
         )
@@ -44,26 +50,37 @@ export async function POST(request: NextRequest) {
     if (entriesError) {
       console.error('Error fetching entries:', entriesError)
       return NextResponse.json(
-        { error: 'Failed to fetch entries' },
+        { ok: false, error: 'Failed to fetch entries' },
         { status: 500 }
       )
     }
 
     if (!entries || entries.length === 0) {
-      return NextResponse.json(
-        { error: 'No entries found for analysis' },
-        { status: 404 }
-      )
+      return NextResponse.json({
+        ok: true,
+        data: {
+          emotionalPatterns: 'Start writing entries to receive personalized insights.',
+          growthAreas: 'Continue your journaling practice to identify growth areas.',
+          strengths: 'Your commitment to self-reflection is a strength in itself.',
+          challenges: 'As you continue journaling, deeper patterns will emerge.',
+          recommendations: 'Try to write at least one entry daily to build momentum.',
+          insightSummary: 'Welcome to your wellness journey! Keep writing and we\'ll provide deeper insights as you progress.',
+          confidence: 30
+        }
+      })
     }
 
     // Prepare context for AI analysis
     const entriesContext = entries.map((entry, index) => {
       const date = new Date(entry.created_at).toLocaleDateString()
-      const sentiment = entry.sentiment?.[0] || { label: 'neutral', score: 0.5 }
+      const sentiment = entry.sentiment?.[0] || { label: 'neutral', score: 0.5, confidence: 0.5 }
+      const confidence = typeof sentiment.confidence === 'number' 
+        ? Math.round(sentiment.confidence * 100) 
+        : Math.round(sentiment.score * 100)
       
       return `Entry ${index + 1} (${date}):
 Content: "${entry.content}"
-Sentiment: ${sentiment.label} (${Math.round(sentiment.score * 100)}% confidence)
+Sentiment: ${sentiment.label} (${confidence}% confidence)
 Emotions: ${sentiment.emotions?.join(', ') || 'Not detected'}
 AI Summary: ${sentiment.summary || 'No summary available'}`
     }).join('\n\n')
@@ -120,6 +137,7 @@ Guidelines:
     try {
       analysis = JSON.parse(responseText)
     } catch (parseError) {
+      console.error('JSON parse error:', parseError)
       // Fallback if JSON parsing fails
       analysis = {
         emotionalPatterns: 'Your entries show a thoughtful approach to self-reflection and emotional awareness.',

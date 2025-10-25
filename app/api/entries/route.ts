@@ -197,3 +197,42 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const url = new URL(request.url)
+    const entryId = url.searchParams.get('entryId')
+
+    if (!entryId) {
+      return NextResponse.json(
+        { ok: false, error: 'entryId is required' },
+        { status: 400 }
+      )
+    }
+
+    // Delete the entry (sentiment will be cascade deleted)
+    const { error } = await supabaseAdmin
+      .from('entries')
+      .delete()
+      .eq('id', entryId)
+
+    if (error) {
+      console.error('Error deleting entry:', error)
+      return NextResponse.json(
+        { ok: false, error: 'Failed to delete entry' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      ok: true,
+      data: { message: 'Entry deleted successfully' }
+    })
+  } catch (error: unknown) {
+    console.error('API error:', error instanceof Error ? error.message : 'Unknown error')
+    return NextResponse.json(
+      { ok: false, error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

@@ -139,7 +139,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
       suggestion: sentiment.summary || 'Ready for today\'s reflection? I\'m here to listen.',
       emotions: sentiment.emotions || ['Reflective'],
       insights: [
-        `Your entry shows ${sentiment.label} emotional patterns with ${Math.round(sentiment.confidence * 100)}% confidence.`,
+        `Your entry shows ${sentiment.label} emotional patterns.`,
         'This type of reflection demonstrates emotional awareness and self-reflection skills.',
         'Consider how these feelings might be connected to recent events or ongoing situations.'
       ],
@@ -251,6 +251,34 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     textareaRef.current?.focus()
   }
 
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!confirm('Are you sure you want to delete this entry?')) return
+
+    try {
+      const response = await fetch(`/api/entries?entryId=${entryId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (data.ok) {
+        toast.success('Entry deleted successfully')
+        fetchEntries(user.id)
+      } else {
+        toast.error(data.error || 'Failed to delete entry')
+      }
+    } catch (error) {
+      toast.error('An error occurred while deleting entry')
+    }
+  }
+
+  const handleEditEntry = (entry: Entry) => {
+    setNewEntry(entry.content)
+    textareaRef.current?.focus()
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -317,9 +345,6 @@ export default function DashboardClient({ user }: DashboardClientProps) {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* AI Insights Section */}
-        <AIInsightsSection entries={entries} lastAnalysis={lastAnalysis} />
-
         {/* Two-Column Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
           {/* Left Column - Entry Creation */}
@@ -432,6 +457,15 @@ export default function DashboardClient({ user }: DashboardClientProps) {
               </Card>
             </motion.div>
 
+            {/* AI Guidance & Insights Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+            >
+              <AIInsightsSection entries={entries} lastAnalysis={lastAnalysis} />
+            </motion.div>
+
             {/* Recent Entries */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -473,7 +507,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                     {getTimeAgo(entry.created_at)}
                                   </span>
-                                  {entry.sentiment && (
+                                  {entry.sentiment && typeof entry.sentiment.confidence === 'number' && !isNaN(entry.sentiment.confidence) && entry.sentiment.confidence > 0 && (
                                     <Badge 
                                       variant="secondary" 
                                       className="text-xs"
@@ -501,10 +535,19 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                               >
                                 {expandedEntry === entry.id ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </Button>
-                              <Button variant="ghost" size="sm">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleEditEntry(entry)}
+                              >
                                 <Edit2 className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-red-500 hover:text-red-700"
+                                onClick={() => handleDeleteEntry(entry.id)}
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -610,7 +653,9 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                                       <div className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg p-3 shadow-lg">
                                         <p className="font-semibold text-slate-800">{label}</p>
                                         <p className="text-purple-600">Mood: {data.mood.toFixed(1)}%</p>
-                                        <p className="text-slate-600">Confidence: {data.confidence}%</p>
+                                        {typeof data.confidence === 'number' && !isNaN(data.confidence) && data.confidence > 0 && (
+                                          <p className="text-slate-600">Confidence: {data.confidence.toFixed(0)}%</p>
+                                        )}
                                         {data.emotions.length > 0 && (
                                           <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
                                         )}
