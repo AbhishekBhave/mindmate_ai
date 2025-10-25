@@ -17,6 +17,7 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { JournalHeader } from '@/components/dashboard/JournalHeader'
 import { AnimatedBackground } from '@/components/dashboard/AnimatedBackground'
 import { AIInsightsSection } from '@/components/dashboard/AIInsightsSection'
+import { DashboardAnalyzer } from '@/components/dashboard/DashboardAnalyzer'
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Entry {
@@ -501,6 +502,21 @@ export default function DashboardClient({ user }: DashboardClientProps) {
               <p className="text-sm">Start writing your first entry above!</p>
             </div>
           )}
+        </motion.div>
+
+        {/* Deep AI Analysis Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 1.0 }}
+          className="mt-8"
+        >
+          <DashboardAnalyzer 
+            onAnalysisComplete={(analysis) => {
+              console.log('Analysis completed:', analysis)
+              toast.success('Deep analysis completed! Check out your personalized insights below.')
+            }}
+          />
         </motion.div>
 
         {/* Floating Action Button */}
