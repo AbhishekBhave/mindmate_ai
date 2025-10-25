@@ -1,36 +1,175 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MindMate AI
+
+An AI-powered journaling application built with Next.js 16, TypeScript, and Supabase. Transform your thoughts into insights with intelligent mood tracking and personal reflection tools.
+
+## Features
+
+- 🤖 **AI-Powered Insights**: Get gentle summaries and reflection suggestions for your journal entries
+- 📊 **Mood Tracking**: Visualize your emotional journey with beautiful mood charts
+- 🔒 **Personal & Private**: Your thoughts are yours alone - secure and confidential
+- 🌙 **Dark Mode**: Comfortable viewing in any lighting condition
+- 📱 **Responsive Design**: Works seamlessly on desktop and mobile devices
+
+## Tech Stack
+
+- **Framework**: Next.js 16 with App Router
+- **Language**: TypeScript with strict mode
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
+- **Styling**: Tailwind CSS
+- **UI Components**: Radix UI + shadcn/ui
+- **Charts**: Recharts
+- **Icons**: Lucide React
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+ 
+- npm, yarn, pnpm, or bun
+- Supabase account
+
+### Environment Setup
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd mindmate_ai
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up environment variables:
+```bash
+cp .env.local.example .env.local
+```
+
+Edit `.env.local` with your Supabase credentials:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### Development Workflow
+
+The project includes a robust development server lifecycle management system to prevent common issues:
+
+#### Starting Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+This command automatically:
+- Checks for running Next.js dev processes
+- Removes stale lock files
+- Starts the server on port 3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+#### If You Encounter Issues
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Port conflicts or lock file errors:**
+```bash
+npm run clean && npm run dev
+```
 
-## Learn More
+**Manual cleanup:**
+```bash
+npm run clean
+```
 
-To learn more about Next.js, take a look at the following resources:
+The `clean` script removes:
+- `.next` (Next.js build cache)
+- `.turbo` (Turbopack cache)  
+- `.vercel/output` (Vercel build output)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+#### Available Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `npm run dev` - Start development server with automatic cleanup
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run clean` - Clean build artifacts
 
-## Deploy on Vercel
+### Database Setup
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Create a new Supabase project
+2. Run the SQL schema from `docs/schema.sql`
+3. Set up Row Level Security (RLS) policies
+4. Configure authentication settings
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Structure
+
+```
+mindmate_ai/
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # Authentication pages
+│   ├── dashboard/         # Main application
+│   └── api/               # API routes
+├── components/            # Reusable UI components
+├── lib/                   # Utilities and configurations
+│   ├── auth.ts           # Authentication helpers
+│   ├── supabase/         # Supabase client configurations
+│   └── validations/       # Form validation schemas
+├── scripts/              # Development scripts
+│   └── dev-clean.mjs     # Dev server lifecycle management
+└── docs/                 # Documentation
+```
+
+## Key Improvements Made
+
+### Development Server Resilience
+- **Automatic cleanup**: Prevents "Port in use" and "Unable to acquire lock" errors
+- **Process detection**: Identifies running Next.js dev processes
+- **Lock file management**: Removes stale lock files automatically
+- **Cross-platform support**: Works on macOS and other Unix-like systems
+
+### TypeScript Configuration
+- **Strict import handling**: Prevents duplicate identifier errors
+- **Type-only imports**: Clear separation between runtime and type imports
+- **Verbose module syntax**: Enforces explicit import/export patterns
+
+### Next.js 16 Compatibility
+- **Middleware migration**: Moved from deprecated middleware to App Router patterns
+- **Server-side authentication**: Implemented in page components
+- **Async cookies API**: Updated for Next.js 16 compatibility
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Connect your GitHub repository to Vercel
+2. Add environment variables in Vercel dashboard
+3. Deploy automatically on push to main branch
+
+### Other Platforms
+
+The application builds successfully with:
+```bash
+npm run build
+```
+
+## Security Considerations
+
+- All authentication is handled server-side
+- Row Level Security (RLS) enabled on all database tables
+- Environment variables properly configured
+- No sensitive data exposed to client
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly with `npm run dev` and `npm run build`
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Disclaimer
+
+AI can be wrong. Do not use as medical advice. This tool is for personal reflection and should not replace professional mental health support.
