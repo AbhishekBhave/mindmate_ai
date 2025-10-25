@@ -119,16 +119,16 @@ export default function HomePage() {
                   Sign In
                 </Button>
               </Link>
-              <Link href="/sign-up">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Button className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-xl backdrop-blur-xl bg-white/10 border-white/20 shadow-[0_0_20px_rgba(183,148,246,0.3)] hover:shadow-[0_0_30px_rgba(183,148,246,0.5)] transition-all duration-300">
-                    Get Started
-                  </Button>
-                </motion.div>
-              </Link>
+                      <Link href="/sign-up">
+                        <motion.div
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Button className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:bg-black text-white border-0 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110">
+                            Get Started
+                          </Button>
+                        </motion.div>
+                      </Link>
             </div>
 
             {/* Mobile menu button */}
@@ -164,11 +164,11 @@ export default function HomePage() {
                       Sign In
                     </Button>
                   </Link>
-                  <Link href="/sign-up">
-                    <Button className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-xl">
-                      Get Started
-                    </Button>
-                  </Link>
+                          <Link href="/sign-up">
+                            <Button className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:bg-black text-white border-0 rounded-xl transition-all duration-300 hover:scale-110">
+                              Get Started
+                            </Button>
+                          </Link>
                 </div>
               </div>
             </motion.div>
@@ -224,20 +224,20 @@ export default function HomePage() {
             </p>
 
             {/* Final CTA */}
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="mb-8"
-            >
-              <Link href="/sign-up">
-                <Button
-                  size="lg"
-                  className="px-12 py-4 text-lg font-semibold bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-2xl backdrop-blur-xl bg-white/10 border-white/20 shadow-[0_0_30px_rgba(183,148,246,0.3)] hover:shadow-[0_0_40px_rgba(183,148,246,0.5)] transition-all duration-300"
-                >
-                  Start Your Mental Wellness Journey Today
-                </Button>
-              </Link>
-            </motion.div>
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="mb-8"
+                    >
+                      <Link href="/sign-up">
+                        <Button
+                          size="lg"
+                          className="px-12 py-4 text-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:bg-black text-white border-0 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110"
+                        >
+                          Start Your Mental Wellness Journey Today
+                        </Button>
+                      </Link>
+                    </motion.div>
 
             {/* Disclaimer */}
             <div className="max-w-2xl mx-auto">

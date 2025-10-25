@@ -33,7 +33,11 @@ export function AIInsightsSection({ entries }: AIInsightsSectionProps) {
           label: lastEntry.sentiment.label,
           score: lastEntry.sentiment.score
         })
-        setConfidence(Math.floor(lastEntry.sentiment.score * 100))
+        // Ensure confidence is a valid number between 0-100
+        const confidenceValue = typeof lastEntry.sentiment.score === 'number' 
+          ? Math.max(0, Math.min(100, lastEntry.sentiment.score * 100))
+          : 50
+        setConfidence(confidenceValue)
         
         // Detect emotions (simplified)
         const content = lastEntry.content.toLowerCase()

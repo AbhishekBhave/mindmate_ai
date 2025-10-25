@@ -176,7 +176,7 @@ export function MockEntry() {
         <Button
           onClick={handleSubmit}
           disabled={!text.trim() || isAnalyzing}
-          className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-xl backdrop-blur-xl bg-white/10 border-white/20 shadow-[0_0_20px_rgba(183,148,246,0.3)] hover:shadow-[0_0_30px_rgba(183,148,246,0.5)] transition-all duration-300"
+          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:bg-black text-white border-0 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110"
         >
           {isAnalyzing ? (
             <>

@@ -104,6 +104,48 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { entryId, sentiment } = await request.json()
+
+    if (!entryId || !sentiment) {
+      return NextResponse.json(
+        { ok: false, error: 'entryId and sentiment are required' },
+        { status: 400 }
+      )
+    }
+
+    // Update the sentiment for the entry
+    const { error: sentimentError } = await supabaseAdmin
+      .from('sentiments')
+      .upsert({
+        entry_id: entryId,
+        score: sentiment.confidence / 100, // Convert percentage to decimal
+        label: sentiment.sentiment,
+        summary: sentiment.suggestion
+      })
+
+    if (sentimentError) {
+      console.error('Error updating sentiment:', sentimentError)
+      return NextResponse.json(
+        { ok: false, error: 'Failed to update sentiment' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      ok: true,
+      data: { message: 'Sentiment updated successfully' }
+    })
+  } catch (error: unknown) {
+    console.error('API error:', error instanceof Error ? error.message : 'Unknown error')
+    return NextResponse.json(
+      { ok: false, error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)

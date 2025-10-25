@@ -88,7 +88,7 @@ export function CTAButtons({ className = '' }: CTAButtonsProps) {
         >
           <Button
             size="lg"
-            className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-2xl backdrop-blur-xl bg-white/10 border-white/20 shadow-[0_0_30px_rgba(183,148,246,0.3)] hover:shadow-[0_0_40px_rgba(183,148,246,0.5)] transition-all duration-300"
+            className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:bg-black text-white border-0 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110"
           >
             Start Your Journey
             <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
@@ -109,7 +109,7 @@ export function CTAButtons({ className = '' }: CTAButtonsProps) {
         <Button
           variant="outline"
           size="lg"
-          className="px-8 py-4 text-lg font-semibold backdrop-blur-xl bg-white/10 border-white/30 text-purple-700 dark:text-purple-300 hover:bg-white/20 rounded-2xl transition-all duration-300"
+          className="px-8 py-4 text-lg font-semibold bg-white border-2 border-purple-600 text-purple-600 hover:bg-black hover:text-white rounded-2xl transition-all duration-300 hover:scale-110"
         >
           <Play className="mr-2 h-5 w-5" />
           Watch Demo

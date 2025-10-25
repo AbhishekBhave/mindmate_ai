@@ -37,10 +37,10 @@ interface DashboardClientProps {
 export default function DashboardClient({ user }: DashboardClientProps) {
   const [entries, setEntries] = useState<Entry[]>([])
   const [newEntry, setNewEntry] = useState('')
-  const [selectedMood, setSelectedMood] = useState('😊')
   const [isLoading, setIsLoading] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'idle'>('idle')
   const [characterCount, setCharacterCount] = useState(0)
+  const [placeholderText, setPlaceholderText] = useState('How are you feeling today? What\'s on your mind?')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
 
@@ -94,6 +94,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     setAutoSaveStatus('saving')
     
     try {
+      // First, save the entry
       const response = await fetch('/api/entries', {
         method: 'POST',
         headers: {
@@ -108,6 +109,38 @@ export default function DashboardClient({ user }: DashboardClientProps) {
       const data = await response.json()
 
       if (data.ok) {
+        // Then analyze the entry with AI
+        try {
+          const analysisResponse = await fetch('/api/analyze-entry', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              entryText: newEntry
+            }),
+          })
+
+          const analysisData = await analysisResponse.json()
+          
+          if (analysisData.ok) {
+            // Update the entry with AI analysis
+            const updateResponse = await fetch('/api/entries', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                entryId: data.data.id,
+                sentiment: analysisData.data
+              }),
+            })
+          }
+        } catch (analysisError) {
+          console.error('AI Analysis failed:', analysisError)
+          // Continue without AI analysis
+        }
+
         toast.success('Entry saved successfully! 🎉', {
           description: 'Your thoughts have been recorded',
         })
@@ -143,7 +176,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
   }
 
   const handlePromptClick = (prompt: string) => {
-    setNewEntry(prompt)
+    setPlaceholderText(prompt)
     textareaRef.current?.focus()
   }
 
@@ -218,33 +251,14 @@ export default function DashboardClient({ user }: DashboardClientProps) {
             className="lg:col-span-1"
           >
             <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-[0_0_40px_rgba(183,148,246,0.4)] hover:shadow-[0_0_50px_rgba(183,148,246,0.5)] transition-all duration-300">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">How are you feeling?</h2>
-              
-              {/* Mood Selector */}
-              <div className="flex justify-center gap-3 mb-6">
-                {moods.map((mood) => (
-                  <motion.button
-                    key={mood}
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setSelectedMood(mood)}
-                    className={`text-3xl p-2 rounded-xl transition-all duration-300 ${
-                      selectedMood === mood
-                        ? 'bg-purple-500/20 shadow-lg ring-2 ring-purple-400'
-                        : 'hover:bg-white/10'
-                    }`}
-                  >
-                    {mood}
-                  </motion.button>
-                ))}
-              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Share your thoughts</h2>
 
               {/* Entry Form */}
               <form onSubmit={handleSubmitEntry} className="space-y-4">
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
-                    placeholder="Write your thoughts here..."
+                    placeholder={placeholderText}
                     value={newEntry}
                     onChange={(e) => setNewEntry(e.target.value)}
                     className="backdrop-blur-sm bg-white/5 border-white/20 focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all duration-300 min-h-[200px]"
