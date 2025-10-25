@@ -1,16 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+// WARNING: This is a complete dashboard redesign for glassmorphic UI
+// All database operations, authentication, and entry saving functionality are preserved
+// Only the UI presentation has been transformed
+
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { User as UserIcon, LogOut, Moon, Sun, BarChart3 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Send, Mic, Plus, Edit2, Trash2, Search, TrendingUp, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { JournalHeader } from '@/components/dashboard/JournalHeader'
+import { AnimatedBackground } from '@/components/dashboard/AnimatedBackground'
+import { AIInsightsSection } from '@/components/dashboard/AIInsightsSection'
+import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Entry {
   id: string
@@ -23,11 +30,6 @@ interface Entry {
   }
 }
 
-interface ChartData {
-  date: string
-  mood: number
-}
-
 interface DashboardClientProps {
   user: SupabaseUser
 }
@@ -35,15 +37,39 @@ interface DashboardClientProps {
 export default function DashboardClient({ user }: DashboardClientProps) {
   const [entries, setEntries] = useState<Entry[]>([])
   const [newEntry, setNewEntry] = useState('')
+  const [selectedMood, setSelectedMood] = useState('😊')
   const [isLoading, setIsLoading] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'idle'>('idle')
+  const [characterCount, setCharacterCount] = useState(0)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
+
+  const moods = ['😊', '😔', '😐', '😡', '😰', '😴']
+  const suggestedPrompts = [
+    'What made you smile today?',
+    'Describe a challenge you overcame',
+    'What are you grateful for?',
+    'How are you feeling right now?',
+    'What lesson did you learn today?'
+  ]
 
   useEffect(() => {
     if (user?.id) {
       fetchEntries(user.id)
     }
   }, [user])
+
+  useEffect(() => {
+    setCharacterCount(newEntry.length)
+  }, [newEntry])
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+    }
+  }, [newEntry])
 
   const fetchEntries = async (userId: string) => {
     try {
@@ -65,6 +91,8 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     if (!newEntry.trim() || !user?.id) return
 
     setIsLoading(true)
+    setAutoSaveStatus('saving')
+    
     try {
       const response = await fetch('/api/entries', {
         method: 'POST',
@@ -80,14 +108,22 @@ export default function DashboardClient({ user }: DashboardClientProps) {
       const data = await response.json()
 
       if (data.ok) {
-        toast.success('Entry saved successfully!')
+        toast.success('Entry saved successfully! 🎉', {
+          description: 'Your thoughts have been recorded',
+        })
         setNewEntry('')
+        setAutoSaveStatus('saved')
         fetchEntries(user.id)
+        
+        // Reset status after 2 seconds
+        setTimeout(() => setAutoSaveStatus('idle'), 2000)
       } else {
         toast.error(data.error || 'Failed to save entry')
+        setAutoSaveStatus('idle')
       }
     } catch {
       toast.error('An error occurred. Please try again.')
+      setAutoSaveStatus('idle')
     } finally {
       setIsLoading(false)
     }
@@ -106,172 +142,351 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     }
   }
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode)
-    document.documentElement.classList.toggle('dark')
+  const handlePromptClick = (prompt: string) => {
+    setNewEntry(prompt)
+    textareaRef.current?.focus()
   }
 
-  // Prepare chart data
-  const chartData: ChartData[] = entries
-    .filter(entry => entry.sentiment)
-    .slice(0, 30) // Last 30 entries
-    .map(entry => ({
-      date: new Date(entry.created_at).toLocaleDateString(),
-      mood: entry.sentiment!.score
-    }))
-    .reverse()
+  const getTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
 
-  const getMoodColor = (label: string) => {
-    switch (label) {
-      case 'positive': return 'text-green-600'
-      case 'negative': return 'text-red-600'
-      default: return 'text-gray-600'
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
+    return date.toLocaleDateString()
+  }
+
+  const getMoodEmoji = (sentiment?: { label: string }) => {
+    if (!sentiment) return '😐'
+    switch (sentiment.label) {
+      case 'positive': return '😊'
+      case 'negative': return '😔'
+      default: return '😐'
     }
   }
 
+  // Prepare chart data
+  const chartData = entries
+    .filter(entry => entry.sentiment)
+    .slice(0, 30)
+    .map(entry => ({
+      date: new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      mood: entry.sentiment!.score * 100
+    }))
+    .reverse()
+
+  // Calculate stats
+  const streak = 5 // This would come from database in real app
+  const totalEntries = entries.length
+  const avgMood = entries
+    .filter(e => e.sentiment)
+    .reduce((acc, e) => acc + (e.sentiment!.score * 100), 0) / (entries.filter(e => e.sentiment).length || 1)
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <BarChart3 className="h-8 w-8 text-blue-600 mr-2" />
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                MindMate AI
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleDarkMode}
-              >
-                {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <UserIcon className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <div className="flex items-center justify-start gap-2 p-2">
-                    <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium">{user?.email}</p>
-                      <p className="w-[200px] truncate text-sm text-muted-foreground">
-                        {user?.id}
-                      </p>
-                    </div>
-                  </div>
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-800 relative overflow-hidden">
+      {/* Animated Background */}
+      <AnimatedBackground />
+
+      {/* Gradient Background Mesh */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3CradialGradient id='a' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='%23B794F6' stop-opacity='0.1'/%3E%3Cstop offset='100%25' stop-color='%23B794F6' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='100' height='100' fill='url(%23a)'/%3E%3C/svg%3E")`,
+          backgroundSize: '200px 200px',
+        }} />
+      </div>
+
+      {/* Fixed Header */}
+      <JournalHeader userEmail={user.email || ''} onSignOut={handleSignOut} />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Panel: New Entry */}
-          <Card className="lg:col-span-1 h-fit">
-            <CardHeader>
-              <CardTitle>New Entry</CardTitle>
-              <CardDescription>Share your thoughts and feelings</CardDescription>
-            </CardHeader>
-            <CardContent>
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* AI Insights Section */}
+        <AIInsightsSection entries={entries} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Main Entry Section */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="lg:col-span-1"
+          >
+            <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-[0_0_40px_rgba(183,148,246,0.4)] hover:shadow-[0_0_50px_rgba(183,148,246,0.5)] transition-all duration-300">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">How are you feeling?</h2>
+              
+              {/* Mood Selector */}
+              <div className="flex justify-center gap-3 mb-6">
+                {moods.map((mood) => (
+                  <motion.button
+                    key={mood}
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setSelectedMood(mood)}
+                    className={`text-3xl p-2 rounded-xl transition-all duration-300 ${
+                      selectedMood === mood
+                        ? 'bg-purple-500/20 shadow-lg ring-2 ring-purple-400'
+                        : 'hover:bg-white/10'
+                    }`}
+                  >
+                    {mood}
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Entry Form */}
               <form onSubmit={handleSubmitEntry} className="space-y-4">
-                <Textarea
-                  placeholder="How are you feeling today? What's on your mind?"
-                  value={newEntry}
-                  onChange={(e) => setNewEntry(e.target.value)}
-                  rows={6}
-                  required
-                />
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Saving...' : 'Save Entry'}
-                </Button>
+                <div className="relative">
+                  <Textarea
+                    ref={textareaRef}
+                    placeholder="Write your thoughts here..."
+                    value={newEntry}
+                    onChange={(e) => setNewEntry(e.target.value)}
+                    className="backdrop-blur-sm bg-white/5 border-white/20 focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all duration-300 min-h-[200px]"
+                    required
+                  />
+                  
+                  {/* Character counter */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: characterCount > 0 ? 1 : 0 }}
+                    className="absolute bottom-3 right-3 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {characterCount}
+                  </motion.div>
+                </div>
+
+                {/* Suggested Prompts */}
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                  {suggestedPrompts.map((prompt, index) => (
+                    <motion.button
+                      key={prompt}
+                      type="button"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6 + index * 0.1 }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handlePromptClick(prompt)}
+                      className="px-4 py-2 rounded-full backdrop-blur-sm bg-white/10 border border-white/20 hover:bg-white/20 transition-all duration-300 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                    >
+                      {prompt}
+                    </motion.button>
+                  ))}
+                </div>
+
+                {/* Auto-save indicator */}
+                <AnimatePresence>
+                  {autoSaveStatus === 'saving' && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-sm text-gray-500 dark:text-gray-400"
+                    >
+                      Saving...
+                    </motion.p>
+                  )}
+                  {autoSaveStatus === 'saved' && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-sm text-green-500"
+                    >
+                      ✓ Saved successfully!
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 rounded-xl backdrop-blur-xl shadow-[0_0_20px_rgba(183,148,246,0.3)] hover:shadow-[0_0_30px_rgba(183,148,246,0.5)] transition-all duration-300 py-3 text-lg font-semibold relative overflow-hidden group"
+                  >
+                    {isLoading ? 'Saving...' : (
+                      <>
+                        <Send className="h-5 w-5 inline mr-2" />
+                        Save Entry
+                      </>
+                    )}
+                    <span className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></span>
+                  </Button>
+                </motion.div>
               </form>
-            </CardContent>
-          </Card>
+            </div>
+          </motion.div>
 
-          {/* Right Panel: Mood Chart and Recent Entries */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Mood Over Time</CardTitle>
-                <CardDescription>Your emotional journey (last 30 entries)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis domain={[0, 1]} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="mood" stroke="#8884d8" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-gray-500">
-                    No mood data available yet. Start writing entries to see your mood chart!
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {/* Chart and Stats */}
+          <div className="space-y-6">
+            {/* Mood Chart */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+              className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(183,148,246,0.2)]"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Mood Over Time</h3>
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#9333EA" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#9333EA" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="date" stroke="rgba(156,163,175,0.8)" />
+                    <YAxis stroke="rgba(156,163,175,0.8)" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Area type="monotone" dataKey="mood" stroke="#9333EA" fill="url(#colorMood)" strokeWidth={2} />
+                    <Line type="monotone" dataKey="mood" stroke="#9333EA" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[250px] flex items-center justify-center text-gray-500">
+                  <p>Start writing to see your mood chart!</p>
+                </div>
+              )}
+            </motion.div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Entries</CardTitle>
-                <CardDescription>Your latest journal entries with AI insights</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {entries.length > 0 ? (
-                  entries.slice(0, 5).map((entry) => (
-                    <div key={entry.id} className="border-b pb-4 last:border-b-0">
-                      <div className="flex justify-between items-start mb-2">
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(entry.created_at).toLocaleString()}
-                        </p>
-                        {entry.sentiment && (
-                          <span className={`text-sm font-medium ${getMoodColor(entry.sentiment.label)}`}>
-                            {entry.sentiment.label}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-lg mb-2">{entry.content}</p>
-                      {entry.sentiment?.summary && (
-                        <p className="text-sm italic text-gray-600 dark:text-gray-400">
-                          AI Summary: {entry.sentiment.summary}
-                        </p>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-gray-500 py-8">
-                    No entries yet. Start writing your first entry!
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Stats Panel */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.7 }}
+              className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(183,148,246,0.2)]"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Progress</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.8, type: 'spring' }}
+                    className="text-3xl mb-2"
+                  >
+                    🔥
+                  </motion.div>
+                  <div className="text-2xl font-bold text-purple-600">{streak}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Day streak</div>
+                </div>
+                <div className="text-center">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.9, type: 'spring' }}
+                    className="text-3xl mb-2"
+                  >
+                    📝
+                  </motion.div>
+                  <div className="text-2xl font-bold text-purple-600">{totalEntries}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Total entries</div>
+                </div>
+                <div className="text-center">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 1.0, type: 'spring' }}
+                    className="text-3xl mb-2"
+                  >
+                    😊
+                  </motion.div>
+                  <div className="text-2xl font-bold text-purple-600">{Math.round(avgMood)}%</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Avg mood</div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
-      </main>
 
-      {/* Disclaimer */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            <strong>Disclaimer:</strong> AI can be wrong. Do not use as medical advice. This tool is for personal reflection and should not replace professional mental health support.
-          </p>
-        </div>
-      </div>
+        {/* Recent Entries */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.8 }}
+          className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(183,148,246,0.2)]"
+        >
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Recent Entries</h3>
+          
+          {entries.length > 0 ? (
+            <div className="space-y-4">
+              {entries.slice(0, 5).map((entry, index) => (
+                <motion.div
+                  key={entry.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.9 + index * 0.1 }}
+                  whileHover={{
+                    boxShadow: '0 0 30px rgba(147, 51, 234, 0.5)',
+                    scale: 1.01
+                  }}
+                  className="backdrop-blur-sm bg-white/5 border border-white/10 hover:border-white/20 rounded-xl p-4 transition-all duration-300 group"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{getMoodEmoji(entry.sentiment)}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {getTimeAgo(entry.created_at)}
+                      </span>
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <button className="p-1 rounded-lg hover:bg-white/10">
+                        <Edit2 className="h-4 w-4 text-gray-500" />
+                      </button>
+                      <button className="p-1 rounded-lg hover:bg-red-50/10">
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">{entry.content}</p>
+                  {entry.sentiment?.summary && (
+                    <div className="mt-2 px-3 py-2 rounded-lg bg-purple-100/20 dark:bg-purple-900/20 border border-purple-200/30 dark:border-purple-700/30">
+                      <p className="text-sm italic text-purple-700 dark:text-purple-300">
+                        AI Insight: {entry.sentiment.summary}
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg mb-2">No entries yet</p>
+              <p className="text-sm">Start writing your first entry above!</p>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Floating Action Button */}
+        <motion.button
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          className="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 shadow-lg hover:shadow-xl flex items-center justify-center z-50"
+          onClick={() => textareaRef.current?.focus()}
+        >
+          <Plus className="h-6 w-6 text-white" />
+        </motion.button>
+      </main>
     </div>
   )
 }

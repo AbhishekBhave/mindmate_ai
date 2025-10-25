@@ -34,3 +34,11 @@ export async function createServerSupabaseClient() {
     },
   })
 }
+
+// Admin client for server-side operations (no cookies)
+export const supabaseAdmin = createServerClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  cookies: {
+    getAll() { return [] },
+    setAll() { /* no-op */ }
+  }
+})
