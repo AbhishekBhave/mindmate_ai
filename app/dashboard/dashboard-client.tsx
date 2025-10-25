@@ -42,6 +42,16 @@ export default function DashboardClient({ user }: DashboardClientProps) {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'idle'>('idle')
   const [characterCount, setCharacterCount] = useState(0)
   const [placeholderText, setPlaceholderText] = useState('How are you feeling today? What\'s on your mind?')
+  const [lastAnalysis, setLastAnalysis] = useState<{
+    sentiment: string
+    confidence: number
+    suggestion: string
+    emotions: string[]
+    insights: string[]
+    suggestions: string[]
+    patterns: string[]
+    growthAreas: string[]
+  } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
 
@@ -125,6 +135,9 @@ export default function DashboardClient({ user }: DashboardClientProps) {
           const analysisData = await analysisResponse.json()
           
           if (analysisData.ok) {
+            // Store the comprehensive analysis for immediate display
+            setLastAnalysis(analysisData.data)
+            
             // Update the entry with AI analysis
             const updateResponse = await fetch('/api/entries', {
               method: 'PUT',
@@ -242,7 +255,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* AI Insights Section */}
-        <AIInsightsSection entries={entries} />
+        <AIInsightsSection entries={entries} lastAnalysis={lastAnalysis} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Main Entry Section */}
