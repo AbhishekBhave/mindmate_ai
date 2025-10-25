@@ -104,18 +104,36 @@ export class EnhancedSentimentAnalyzer {
     const emotions = TextPreprocessor.extractEmotions(content)
 
     // Use OpenAI for sentiment analysis (more reliable)
-    if (process.env.OPENAI_API_KEY) {
+    const apiKey = process.env.OPENAI_API_KEY
+    console.log('🔍 OpenAI API Key present:', !!apiKey)
+    console.log('🔍 API Key length:', apiKey?.length || 0)
+    
+    if (apiKey) {
       try {
+        console.log('🚀 Attempting OpenAI sentiment analysis...')
         const result = await this.analyzeWithOpenAI(content, emotions)
         if (result) {
+          console.log('✅ OpenAI sentiment analysis successful:', { 
+            label: result.finalLabel, 
+            confidence: result.confidence 
+          })
           return result
+        } else {
+          console.log('⚠️ OpenAI returned null result')
         }
-      } catch (error) {
-        console.error('OpenAI sentiment analysis failed:', error)
+      } catch (error: any) {
+        console.error('❌ OpenAI sentiment analysis failed:', {
+          message: error?.message,
+          code: error?.code,
+          type: error?.type
+        })
       }
+    } else {
+      console.log('⚠️ OpenAI API key not found, using fallback')
     }
 
     // Fallback to basic analysis
+    console.log('📉 Using fallback sentiment analysis')
     const fallbackResult = this.fallbackSentimentAnalysis(content)
     return {
       finalScore: fallbackResult.score,
