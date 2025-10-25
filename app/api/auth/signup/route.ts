@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     if (authError) {
       console.error('Auth error:', authError)
       return NextResponse.json(
-        { ok: false, error: 'Failed to create user account' },
+        { ok: false, error: `Failed to create user account: ${authError.message}` },
         { status: 400 }
       )
     }
