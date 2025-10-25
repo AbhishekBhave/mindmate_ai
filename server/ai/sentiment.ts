@@ -127,73 +127,23 @@ export class EnhancedSentimentAnalyzer {
   }
 
   private static async analyzeWithOpenAI(content: string, emotions: string[]): Promise<EnsembleResult | null> {
+    // Use the shared analyzeSentiment function from openai.ts
     try {
-      const OpenAI = (await import('openai')).default
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a sentiment analysis expert. Analyze the emotional tone of the journal entry and respond with valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: `Analyze this journal entry's sentiment:
-
-"${content}"
-
-Respond with JSON:
-{
-  "sentiment": "positive" or "negative" or "neutral",
-  "confidence": 0-1 (decimal),
-  "reasoning": "brief explanation"
-}`
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 200,
-      })
-
-      const text = response.choices[0]?.message?.content
-      if (!text) return null
-
-      // Parse JSON response
-      let parsed
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        // Try to extract JSON if wrapped in markdown
-        const jsonMatch = text.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[0])
-        } else {
-          return null
-        }
-      }
-
-      const sentiment = parsed.sentiment?.toLowerCase() || 'neutral'
-      const label = sentiment.includes('positive') ? 'positive' 
-        : sentiment.includes('negative') ? 'negative' 
-        : 'neutral'
+      const { analyzeSentiment } = await import('./openai')
+      const result = await analyzeSentiment(content)
       
-      let confidence = typeof parsed.confidence === 'number' 
-        ? Math.max(0, Math.min(1, parsed.confidence))
-        : 0.7
-
-      // Adjust confidence based on label
-      if (label === 'neutral') confidence = 0.6
-      else if (confidence < 0.5) confidence = 0.5
-
+      if (!result) return null
+      
+      const { sentiment, confidence } = result
+      
       return {
-        finalScore: label === 'positive' ? 0.8 : label === 'negative' ? 0.2 : 0.5,
-        finalLabel: label,
+        finalScore: sentiment === 'positive' ? 0.8 : sentiment === 'negative' ? 0.2 : 0.5,
+        finalLabel: sentiment,
         confidence,
         emotions,
         modelResults: [{
-          score: label === 'positive' ? 0.8 : label === 'negative' ? 0.2 : 0.5,
-          label,
+          score: sentiment === 'positive' ? 0.8 : sentiment === 'negative' ? 0.2 : 0.5,
+          label: sentiment,
           confidence,
           emotions,
           model: 'openai-gpt-4o-mini'
