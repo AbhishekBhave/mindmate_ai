@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/server/supabase/admin'
-import OpenAI from 'openai'
+import { openaiClient } from '@/server/ai/openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+const openai = openaiClient
+
+if (!openai) {
+  console.warn('OpenAI client not initialized - API key missing')
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!openai) {
       return NextResponse.json(
         { ok: false, error: 'OpenAI API key not configured' },
         { status: 500 }
@@ -129,22 +131,8 @@ Guidelines:
         max_tokens: 800,
       })
     } catch (error: any) {
-      // Handle quota exceeded error gracefully
-      if (error?.code === 'insufficient_quota' || error?.message?.includes('quota')) {
-        console.warn('OpenAI quota exceeded for deep analysis, returning fallback')
-        return NextResponse.json({
-          ok: true,
-          data: {
-            emotionalPatterns: 'Based on your entries, you\'re actively engaging in self-reflection. This regular journaling practice is already showing value in building emotional awareness.',
-            growthAreas: 'Consider exploring recurring themes in your entries and how they relate to your goals and values.',
-            strengths: 'Your commitment to journaling demonstrates self-awareness and a desire for personal growth. This is a significant strength.',
-            challenges: 'As you continue this practice, you may discover deeper patterns that require attention and care.',
-            recommendations: 'Keep a consistent journaling routine, try to identify patterns across entries, and consider how different emotions relate to specific situations.',
-            insightSummary: 'Your journey of self-reflection shows dedication to personal growth. Continue exploring your thoughts and feelings, and remember that small daily reflections can lead to meaningful insights over time.',
-            confidence: 40
-          }
-        })
-      }
+      // Log API errors but don't hide them - user has credits now
+      console.error('OpenAI API error:', error?.message || error)
       throw error
     }
 

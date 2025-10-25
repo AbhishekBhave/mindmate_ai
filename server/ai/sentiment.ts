@@ -150,16 +150,17 @@ export class EnhancedSentimentAnalyzer {
         }]
       }
     } catch (error: any) {
-      // Handle quota exceeded or other OpenAI errors gracefully
+      // Log the error but don't fall back for quota errors anymore (user has credits now)
       console.error('OpenAI sentiment error:', error?.message || error)
       
-      // If it's a quota error, fall back to rule-based analysis
-      if (error?.code === 'insufficient_quota' || error?.message?.includes('quota')) {
-        console.warn('OpenAI quota exceeded, falling back to rule-based sentiment analysis')
+      // Only fall back for non-quota errors
+      if (error?.code !== 'insufficient_quota' && !error?.message?.includes('quota')) {
+        console.warn('OpenAI API error, falling back to rule-based sentiment analysis')
         return this.ruleBasedSentiment(content, emotions)
       }
       
-      return null
+      // For quota errors, throw to surface the real issue
+      throw error
     }
   }
 
