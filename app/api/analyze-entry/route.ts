@@ -9,9 +9,12 @@ if (!openai) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('📥 Received analyze-entry request')
     const { entryText } = await request.json()
+    console.log('📝 Entry text length:', entryText?.length || 0)
 
     if (!entryText || typeof entryText !== 'string') {
+      console.log('❌ Invalid entry text')
       return NextResponse.json(
         { error: 'Entry text is required' },
         { status: 400 }
@@ -19,11 +22,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!openai) {
+      console.log('❌ OpenAI client not available')
       return NextResponse.json(
         { error: 'OpenAI API key not configured' },
         { status: 500 }
       )
     }
+
+    console.log('✅ OpenAI client available, proceeding...')
 
     const prompt = `Analyze this journal entry comprehensively and provide detailed, supportive guidance. 
 
@@ -54,6 +60,7 @@ Guidelines:
 
     let completion
     try {
+      console.log('🚀 Calling OpenAI API with prompt length:', prompt.length)
       completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
@@ -69,14 +76,17 @@ Guidelines:
         temperature: 0.7,
         max_tokens: 300,
       })
+      console.log('✅ OpenAI API call successful')
     } catch (error: any) {
       // Log API errors but don't hide them - user has credits now
-      console.error('OpenAI API error:', error?.message || error)
+      console.error('❌ OpenAI API error:', error?.message || error)
       throw error
     }
 
     const responseText = completion.choices[0]?.message?.content
+    console.log('📄 Response length:', responseText?.length || 0)
     if (!responseText) {
+      console.log('❌ No response from OpenAI')
       throw new Error('No response from OpenAI')
     }
 
@@ -125,6 +135,12 @@ Guidelines:
     const validGrowthAreas = Array.isArray(analysis.growthAreas) 
       ? analysis.growthAreas.filter((g: any) => typeof g === 'string')
       : ['Regular reflection practice to build emotional intelligence']
+
+    console.log('✅ Returning analysis data:', {
+      sentiment: validSentiment,
+      confidence: validConfidence,
+      suggestionLength: validSuggestion.length
+    })
 
     return NextResponse.json({
       ok: true,

@@ -177,6 +177,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
 
       if (data.ok) {
         // Then analyze the entry with AI
+        console.log('🤖 Calling /api/analyze-entry API...')
         try {
           const analysisResponse = await fetch('/api/analyze-entry', {
             method: 'POST',
@@ -188,11 +189,14 @@ export default function DashboardClient({ user }: DashboardClientProps) {
             }),
           })
 
+          console.log('📊 Analysis API response status:', analysisResponse.status)
           const analysisData = await analysisResponse.json()
+          console.log('📊 Analysis data received:', analysisData)
           
           if (analysisData.ok) {
             // Store the comprehensive analysis for immediate display
             setLastAnalysis(analysisData.data)
+            console.log('✅ Analysis stored in lastAnalysis state')
             
             // Update the entry with AI analysis
             const updateResponse = await fetch('/api/entries', {
