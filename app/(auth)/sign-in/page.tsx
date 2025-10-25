@@ -31,6 +31,10 @@ export default function SignInPage() {
       const data = await response.json()
 
       if (data.ok) {
+        // Store user ID in localStorage for authentication
+        if (data.data?.user?.id) {
+          localStorage.setItem('userId', data.data.user.id)
+        }
         toast.success('Welcome back!')
         router.push('/dashboard')
       } else {

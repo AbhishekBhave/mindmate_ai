@@ -28,7 +28,7 @@ MindMate AI is a personal journaling app that uses AI to provide insights and mo
    - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
    - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
-   - `OPENAI_API_KEY`: Your OpenAI API key
+   -`OPENAI_API_KEY`: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
    - `HUGGINGFACE_API_KEY`: (Optional) Your Hugging Face API key
 
 ## Supabase Setup

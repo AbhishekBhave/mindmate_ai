@@ -1,50 +1,41 @@
-import OpenAI from 'openai'
+import OpenAI from "openai";
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-}) : null
+const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
-export async function summarizeText(content: string): Promise<{ summary: string; suggestions: string[] }> {
-  if (!openai) {
-    return {
-      summary: "Summary unavailable - OpenAI API key not configured",
-      suggestions: ["Take time to reflect on your feelings today", "Consider what brought you joy or peace"]
-    }
+export async function summarizeText(content: string) {
+  if (!client) {
+    console.warn('OpenAI API key not configured. Returning fallback summary.');
+    return { summary: "Summary unavailable - OpenAI API key not configured" };
   }
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are a gentle, supportive AI assistant that helps users reflect on their journal entries. Provide a brief summary (1-2 sentences) and 2-3 gentle, encouraging suggestions for self-reflection. Keep responses warm and non-judgmental."
-        },
-        {
-          role: "user",
-          content: `Please summarize this journal entry and provide gentle reflection suggestions:\n\n${content}`
-        }
-      ],
-      max_tokens: 200,
+    const prompt = `
+    Summarize the user's journal entry in 1–2 concise, empathetic sentences.
+    Reflect the overall tone without giving advice.
+    Text: """${content}"""
+    `;
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "system", content: prompt }],
+      max_tokens: 100,
       temperature: 0.7,
-    })
+    });
 
-    const response = completion.choices[0]?.message?.content || ""
+    const summary = response.choices[0].message?.content ?? "Summary unavailable";
+    return { summary };
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error("OpenAI error:", errorMessage);
     
-    // Parse the response to extract summary and suggestions
-    const lines = response.split('\n').filter(line => line.trim())
-    const summary = lines[0] || "Summary unavailable"
-    const suggestions = lines.slice(1).map(line => line.replace(/^[-•]\s*/, '').trim()).filter(s => s.length > 0)
+    // Handle specific error types
+    if (errorMessage.includes('quota') || errorMessage.includes('429')) {
+      return { summary: "Summary unavailable - OpenAI quota exceeded. Please check your billing." };
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+      return { summary: "Summary unavailable - OpenAI API key invalid." };
+    } else if (errorMessage.includes('rate limit')) {
+      return { summary: "Summary unavailable - OpenAI rate limit exceeded. Please try again later." };
+    }
     
-    return {
-      summary,
-      suggestions: suggestions.length > 0 ? suggestions : ["Take time to reflect on your feelings today", "Consider what brought you joy or peace"]
-    }
-  } catch (error) {
-    console.error('OpenAI API error:', error)
-    return {
-      summary: "Summary unavailable",
-      suggestions: ["Take time to reflect on your feelings today", "Consider what brought you joy or peace"]
-    }
+    return { summary: "Summary unavailable" };
   }
 }

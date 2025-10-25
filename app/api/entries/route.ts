@@ -14,6 +14,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate content length
+    if (content.length > 5000) {
+      return NextResponse.json(
+        { ok: false, error: 'Entry content too long (max 5000 characters)' },
+        { status: 400 }
+      )
+    }
+
     // Create the entry
     const { data: entry, error: entryError } = await supabaseAdmin
       .from('entries')
@@ -59,13 +67,12 @@ export async function POST(request: NextRequest) {
           entry,
           analysis: {
             summary: summaryResult.summary,
-            suggestions: summaryResult.suggestions,
             sentiment: sentimentResult
           }
         }
       })
-    } catch (aiError) {
-      console.error('AI analysis error:', aiError)
+    } catch (aiError: unknown) {
+      console.error('AI analysis error:', aiError instanceof Error ? aiError.message : 'Unknown error')
       
       // Save entry with default sentiment if AI fails
       await supabaseAdmin
@@ -83,14 +90,13 @@ export async function POST(request: NextRequest) {
           entry,
           analysis: {
             summary: 'Summary unavailable',
-            suggestions: ['Take time to reflect on your feelings today'],
             sentiment: { score: 0.5, label: 'neutral' as const }
           }
         }
       })
     }
-  } catch (error) {
-    console.error('API error:', error)
+  } catch (error: unknown) {
+    console.error('API error:', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { ok: false, error: 'Internal server error' },
       { status: 500 }
@@ -100,8 +106,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
+    const url = new URL(request.url)
+    const userId = url.searchParams.get('userId')
 
     if (!userId) {
       return NextResponse.json(
@@ -132,8 +138,8 @@ export async function GET(request: NextRequest) {
       ok: true,
       data: entries
     })
-  } catch (error) {
-    console.error('API error:', error)
+  } catch (error: unknown) {
+    console.error('API error:', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { ok: false, error: 'Internal server error' },
       { status: 500 }
