@@ -38,3 +38,11 @@ export async function getServerSupabase() {
   })
 }
 
+/**
+ * Creates a Supabase server client (alias for backwards compatibility)
+ * @deprecated Use getServerSupabase instead
+ */
+export async function createSupabaseServerClient() {
+  return getServerSupabase()
+}
+

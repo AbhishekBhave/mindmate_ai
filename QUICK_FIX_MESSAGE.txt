@@ -1,0 +1,34 @@
+Quick Fix for "anonymous_username column not found" Error:
+
+OPTION 1 (Recommended - Clean Start):
+--------------------------------------
+Run this in Supabase SQL Editor:
+
+```sql
+DROP TABLE IF EXISTS pseudonyms CASCADE;
+
+CREATE TABLE pseudonyms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  anonymous_username TEXT NOT NULL,
+  color_accent TEXT NOT NULL DEFAULT '#B794F6',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_pseudonyms_user_id ON pseudonyms(user_id);
+ALTER TABLE pseudonyms ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own pseudonyms" ON pseudonyms
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own pseudonyms" ON pseudonyms
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+```
+
+OPTION 2 (Keep existing data):
+--------------------------------
+Use the file: supabase/add-missing-column.sql
+
+After running either option:
+1. Restart dev server: npm run dev
+2. Try posting again
+3. It should work!

@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Send, Plus, Edit2, Trash2, TrendingUp, Calendar, Clock, Heart, 
   Brain, Sparkles, Target, BookOpen, BarChart3, Users, Settings,
-  ChevronDown, ChevronUp, Eye, EyeOff, Bell, Smile, Meh, Frown
+  ChevronDown, ChevronUp, Eye, EyeOff, Bell, Smile, Meh, Frown, MessageSquare
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
@@ -938,6 +938,48 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
               toast.success('Deep analysis completed! Check out your personalized insights below.')
             }}
           />
+        </motion.div>
+
+        {/* Community Posts Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.6 }}
+          className="mt-8"
+        >
+          <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl hover:shadow-2xl transition-all duration-300">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center text-xl text-slate-800 dark:text-slate-200">
+                    <MessageSquare className="h-6 w-6 text-purple-500 mr-3" />
+                    Community Posts
+                  </CardTitle>
+                  <CardDescription className="text-slate-600 dark:text-slate-400">
+                    Connect with others anonymously for support and encouragement
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                Join our anonymous community space where you can share experiences, find support, and connect with others who understand what you're going through.
+              </p>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button
+                  onClick={() => router.push('/community')}
+                  className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  size="lg"
+                >
+                  <MessageSquare className="mr-2 h-5 w-5" />
+                  Enter Community
+                </Button>
+              </motion.div>
+            </CardContent>
+          </Card>
         </motion.div>
       </main>
 
