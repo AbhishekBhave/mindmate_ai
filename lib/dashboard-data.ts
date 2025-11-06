@@ -18,6 +18,12 @@ export interface DashboardData {
       emotions?: string[]
       summary?: string
       ai_feedback?: string
+      comprehensive_analysis?: {
+        insights?: string[]
+        suggestions?: string[]
+        patterns?: string[]
+        growthAreas?: string[]
+      } | null
       created_at: string
     }
   }>
@@ -115,7 +121,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   
   const sentimentsResult = await supabaseAdmin
     .from('sentiments')
-    .select('id, entry_id, score, label, confidence, summary, ai_feedback, emotions')
+    .select('id, entry_id, score, label, confidence, summary, ai_feedback, emotions, comprehensive_analysis')
     .in('entry_id', entryIds)
 
   if (sentimentsResult.error) {
@@ -149,6 +155,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         emotions: sentiment.emotions,
         summary: sentiment.summary,
         ai_feedback: sentiment.ai_feedback,
+        comprehensive_analysis: sentiment.comprehensive_analysis || null,
         created_at: entry.created_at // Use entry's created_at since sentiments doesn't have one
       } : undefined
     }

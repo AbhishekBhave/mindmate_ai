@@ -52,15 +52,7 @@ export function TimelineStep({ step, icon, title, description, isActive = false 
 }
 
 export function ProgressConnector() {
-  return (
-    <motion.div
-      className="absolute left-6 top-12 bottom-0 w-0.5 bg-gradient-to-b from-purple-500 to-indigo-600"
-      initial={{ scaleY: 0 }}
-      whileInView={{ scaleY: 1 }}
-      transition={{ duration: 2, delay: 0.5 }}
-      viewport={{ once: true }}
-    />
-  )
+  return null
 }
 
 export function HowItWorks() {
@@ -136,7 +128,14 @@ export function HowItWorks() {
         </motion.div>
 
         <div className="relative">
-          <ProgressConnector />
+          <motion.div
+            className="absolute left-6 top-12 w-0.5 bg-gradient-to-b from-purple-500 to-indigo-600"
+            style={{ height: 'calc(200px + 12rem * 3)' }}
+            initial={{ scaleY: 0 }}
+            whileInView={{ scaleY: 1 }}
+            transition={{ duration: 2, delay: 0.5 }}
+            viewport={{ once: true }}
+          />
           
           <div className="space-y-12">
             {steps.map((step, index) => (

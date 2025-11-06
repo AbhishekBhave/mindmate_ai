@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { motion } from 'framer-motion'
 import { Brain, Menu, X } from 'lucide-react'
 import { useState } from 'react'
+import './landing-styles.css'
 
 // Import our new glassmorphic components
 import { HeroSection } from '@/components/HeroSection'
@@ -20,8 +21,11 @@ export default function HomePage() {
   // Users can manually navigate to sign-in or sign-up when they're ready
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-800 relative overflow-hidden">
-      {/* Animated background mesh */}
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="launch-background"></div>
+      
+      {/* Original animated background mesh (keeping for compatibility) */}
       <div className="absolute inset-0 opacity-30">
         <motion.div
           className="absolute inset-0"
@@ -77,7 +81,7 @@ export default function HomePage() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="relative z-50 backdrop-blur-xl bg-white/10 border-b border-white/20"
+        className="launch-foreground relative z-50 backdrop-blur-xl bg-white/10 border-b border-white/20"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -177,7 +181,7 @@ export default function HomePage() {
       </motion.nav>
 
       {/* Main Content */}
-      <main className="relative z-10">
+      <main className="launch-foreground relative z-10">
         <HeroSection />
         <div id="features">
           <FeatureCards />
@@ -197,7 +201,7 @@ export default function HomePage() {
         whileInView={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
         viewport={{ once: true }}
-        className="relative z-10 backdrop-blur-xl bg-white/10 border-t border-white/20 py-12"
+        className="launch-foreground relative z-10 backdrop-blur-xl bg-white/10 border-t border-white/20 py-12"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">

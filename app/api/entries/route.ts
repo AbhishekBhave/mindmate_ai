@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/server/supabase/admin'
 import { getServerSupabase } from '@/server/supabase/server-client'
-import { summarizeText } from '@/server/ai/openai'
+import { summarizeText, analyzeComprehensive } from '@/server/ai/openai'
 import { analyzeSentimentEnhanced } from '@/server/ai/sentiment'
 
 export async function POST(request: NextRequest) {
@@ -62,17 +62,30 @@ export async function POST(request: NextRequest) {
       summary: 'Summary unavailable',
       ai_feedback: 'Analysis in progress...',
       confidence: 0.5,
-      emotions: []
+      emotions: [],
+      comprehensive_analysis: null
     }
 
     try {
       console.log('[API/ENTRIES] Starting AI analysis for entry:', entry.id)
       
-      // Get AI analysis
-      const [summaryResult, sentimentResult] = await Promise.all([
+      // Get AI analysis (sentiment, summary, and comprehensive analysis)
+      const [summaryResult, sentimentResult, comprehensiveResult] = await Promise.all([
         summarizeText(content),
-        analyzeSentimentEnhanced(content)
+        analyzeSentimentEnhanced(content),
+        analyzeComprehensive(content).catch(err => {
+          console.error('[API/ENTRIES] Comprehensive analysis error:', err)
+          return null // Continue even if comprehensive analysis fails
+        })
       ])
+
+      // Build comprehensive_analysis JSONB object
+      const comprehensiveAnalysis = comprehensiveResult ? {
+        insights: comprehensiveResult.insights,
+        suggestions: comprehensiveResult.suggestions,
+        patterns: comprehensiveResult.patterns,
+        growthAreas: comprehensiveResult.growthAreas
+      } : null
 
       // Update sentiment data with AI results
       sentimentData = {
@@ -83,13 +96,15 @@ export async function POST(request: NextRequest) {
         ai_feedback: summaryResult.summary, // Use summary as AI feedback
         confidence: sentimentResult.confidence,
         emotions: sentimentResult.emotions,
-        model_results: sentimentResult.modelResults
+        model_results: sentimentResult.modelResults,
+        comprehensive_analysis: comprehensiveAnalysis
       }
 
       console.log('[API/ENTRIES] AI analysis complete:', {
         label: sentimentData.label,
         score: sentimentData.score,
-        confidence: sentimentData.confidence
+        confidence: sentimentData.confidence,
+        hasComprehensiveAnalysis: !!comprehensiveAnalysis
       })
 
     } catch (aiError: unknown) {
@@ -128,7 +143,8 @@ export async function POST(request: NextRequest) {
           confidence,
           summary,
           ai_feedback,
-          emotions
+          emotions,
+          comprehensive_analysis
         )
       `)
       .eq('id', entry.id)
@@ -242,6 +258,7 @@ export async function GET(request: NextRequest) {
           summary,
           ai_feedback,
           emotions,
+          comprehensive_analysis,
           created_at
         )
       `)

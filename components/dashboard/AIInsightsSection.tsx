@@ -13,6 +13,13 @@ interface Entry {
     score: number
     label: string
     summary?: string
+    ai_feedback?: string
+    comprehensive_analysis?: {
+      insights?: string[]
+      suggestions?: string[]
+      patterns?: string[]
+      growthAreas?: string[]
+    } | null
   }
 }
 
@@ -31,7 +38,7 @@ interface AIInsightsSectionProps {
 }
 
 export function AIInsightsSection({ entries, lastAnalysis }: AIInsightsSectionProps) {
-  // Use comprehensive analysis if available, otherwise fall back to basic sentiment
+  // Prioritize lastAnalysis (from dashboard state), then check entry's comprehensive_analysis, then fall back to basic analysis
   const displayAnalysis = lastAnalysis || getBasicAnalysis(entries[0])
 
   function getBasicAnalysis(entry: Entry | undefined) {
@@ -45,6 +52,34 @@ export function AIInsightsSection({ entries, lastAnalysis }: AIInsightsSectionPr
         suggestions: ['Consider reflecting on what brought you to write this entry today.'],
         patterns: ['Clear emotional expression with good self-awareness'],
         growthAreas: ['Regular reflection practice to build emotional intelligence']
+      }
+    }
+
+    // Check if entry has comprehensive_analysis - use it if available
+    const comprehensiveAnalysis = entry.sentiment.comprehensive_analysis
+    if (comprehensiveAnalysis) {
+      const aiFeedback = entry.sentiment.ai_feedback || entry.sentiment.summary || 'Ready for today\'s reflection? I\'m here to listen.'
+      const confidenceValue = typeof entry.sentiment.score === 'number' 
+        ? Math.max(0, Math.min(100, entry.sentiment.score * 100))
+        : 50
+      
+      return {
+        sentiment: entry.sentiment.label || 'neutral',
+        confidence: confidenceValue,
+        suggestion: aiFeedback,
+        emotions: ['Reflective'], // Will be populated from sentiment if available
+        insights: comprehensiveAnalysis.insights && comprehensiveAnalysis.insights.length > 0
+          ? comprehensiveAnalysis.insights
+          : ['Your entry shows emotional awareness and self-reflection skills.'],
+        suggestions: comprehensiveAnalysis.suggestions && comprehensiveAnalysis.suggestions.length > 0
+          ? comprehensiveAnalysis.suggestions
+          : ['Consider reflecting on what brought you to write this entry today.'],
+        patterns: comprehensiveAnalysis.patterns && comprehensiveAnalysis.patterns.length > 0
+          ? comprehensiveAnalysis.patterns
+          : ['Clear emotional expression with good self-awareness'],
+        growthAreas: comprehensiveAnalysis.growthAreas && comprehensiveAnalysis.growthAreas.length > 0
+          ? comprehensiveAnalysis.growthAreas
+          : ['Regular reflection practice to build emotional intelligence']
       }
     }
 
@@ -64,31 +99,129 @@ export function AIInsightsSection({ entries, lastAnalysis }: AIInsightsSectionPr
     
     const emotions = detectedEmotions.length > 0 ? detectedEmotions : ['Reflective']
 
-    // Set message based on sentiment
+    // Generate contextual suggestions based on entry content
+    const generateSuggestions = () => {
+      const suggestions: string[] = []
+      
+      // Detect themes and generate relevant suggestions
+      if (content.includes('work') || content.includes('job') || content.includes('boss')) {
+        suggestions.push('Work stress is valid. Consider setting boundaries to protect your personal time.')
+      }
+      
+      if (content.includes('friend') || content.includes('friends') || content.includes('social')) {
+        suggestions.push('Nurture your relationships by expressing appreciation for the people who support you.')
+      }
+      
+      if (content.includes('sleep') || content.includes('tired') || content.includes('exhausted')) {
+        suggestions.push('Prioritize rest - quality sleep is essential for emotional well-being.')
+      }
+      
+      if (content.includes('anxious') || content.includes('worried') || content.includes('stressed')) {
+        suggestions.push('Try a 5-minute breathing exercise: inhale for 4 counts, hold for 4, exhale for 4.')
+      }
+      
+      if (content.includes('sad') || content.includes('hurt') || content.includes('disappointed')) {
+        suggestions.push('It\'s okay to feel this way. Consider writing about what specifically triggered these feelings.')
+      }
+      
+      if (content.includes('grateful') || content.includes('thankful') || content.includes('blessed')) {
+        suggestions.push('Keep this gratitude practice going - it builds resilience and positive emotions.')
+      }
+      
+      if (content.includes('goal') || content.includes('plan') || content.includes('future')) {
+        suggestions.push('Break your goals into smaller, achievable steps to maintain momentum.')
+      }
+      
+      if (content.includes('family') || content.includes('parent') || content.includes('sibling')) {
+        suggestions.push('Family relationships can be complex. Reflect on what boundaries might serve you.')
+      }
+      
+      if (content.includes('exercise') || content.includes('workout') || content.includes('physical')) {
+        suggestions.push('Physical activity releases endorphins. Aim to move your body in ways that bring you joy.')
+      }
+      
+      if (content.includes('overwhelmed') || content.includes('burnout') || content.includes('too much')) {
+        suggestions.push('When feeling overwhelmed, try the "2-minute rule" - tackle just one small task to regain momentum.')
+      }
+
+      // Add general suggestions if not enough contextual ones found
+      if (suggestions.length < 3 && entry.sentiment) {
+        if (entry.sentiment.label === 'positive') {
+          suggestions.push('Journal about what specifically contributed to this positive feeling today.')
+          suggestions.push('Consider how you can create more moments like this in your daily routine.')
+          if (suggestions.length < 3) {
+            suggestions.push('Practice gratitude for the small joys in your life.')
+          }
+        } else if (entry.sentiment.label === 'negative') {
+          suggestions.push('Try to identify one small action you can take today to improve your emotional state.')
+          suggestions.push('Remember, tough feelings are temporary. What self-care activity might help right now?')
+          if (suggestions.length < 3) {
+            suggestions.push('Consider reaching out to someone you trust for support.')
+          }
+        } else {
+          suggestions.push('Reflect on what\'s on your mind today and what you need most in this moment.')
+          suggestions.push('Consider what activities or practices help you feel grounded and centered.')
+          if (suggestions.length < 3) {
+            suggestions.push('Take time to check in with yourself - what are you feeling right now?')
+          }
+        }
+      }
+      
+      // Fallback suggestions if still not enough
+      if (suggestions.length === 0) {
+        suggestions.push('Reflect on what brought you to write this entry today.')
+        suggestions.push('Consider how you can maintain or improve your current emotional state.')
+        suggestions.push('Practice gratitude for the positive aspects of your day.')
+      }
+
+      return suggestions.slice(0, 4) // Ensure we return 3-4 suggestions
+    }
+
+    // Set message based on sentiment with content awareness
     let suggestion = 'Ready for today\'s reflection? I\'m here to listen. ✨'
-    if (entry.sentiment.label === 'positive') {
-      suggestion = 'Amazing progress! Your positive energy is inspiring! 🌟 Keep nurturing that inner light.'
-    } else if (entry.sentiment.label === 'negative') {
-      suggestion = 'I hear you, and it\'s okay to feel this way. 💜 Try taking 5 deep breaths. You\'re doing your best.'
+    if (entry.sentiment?.label === 'positive') {
+      if (content.includes('accomplish') || content.includes('success') || content.includes('proud')) {
+        suggestion = 'Celebrate your achievements! Take a moment to acknowledge how you got here. 🌟'
+      } else if (content.includes('grateful') || content.includes('thankful')) {
+        suggestion = 'Your gratitude practice is powerful. Keep nurturing this positive mindset! 🌟'
+      } else {
+        suggestion = 'Amazing progress! Your positive energy is inspiring! 🌟 Keep nurturing that inner light.'
+      }
+    } else if (entry.sentiment?.label === 'negative') {
+      if (content.includes('anxious') || content.includes('worried')) {
+        suggestion = 'Anxiety is understandable. Try deep breathing - you have the tools to navigate this. 💜'
+      } else if (content.includes('sad') || content.includes('hurt')) {
+        suggestion = 'I hear you, and these feelings matter. Self-compassion goes a long way. 💜'
+      } else if (content.includes('angry') || content.includes('frustrated')) {
+        suggestion = 'Anger often signals a need. What boundary or action might help address this? 💜'
+      } else {
+        suggestion = 'I hear you, and it\'s okay to feel this way. Try taking 5 deep breaths. You\'re doing your best. 💜'
+      }
+    } else {
+      if (content.includes('reflect') || content.includes('think') || content.includes('consider')) {
+        suggestion = 'Your reflective mind is working. What deeper understanding is emerging? ✨'
+      } else {
+        suggestion = 'Ready for today\'s reflection? I\'m here to listen. ✨'
+      }
     }
 
     return {
-      sentiment: entry.sentiment.label,
+      sentiment: entry.sentiment.label || 'neutral',
       confidence: confidenceValue,
       suggestion,
       emotions,
       insights: [
-        `Your entry reflects a ${entry.sentiment.label} emotional state with clear patterns.`,
+        `Your entry reflects a ${entry.sentiment.label || 'neutral'} emotional state with clear patterns.`,
         'This type of reflection shows emotional awareness and self-reflection skills.',
         'Consider how these feelings might be connected to recent events or ongoing situations in your life.'
       ],
-      suggestions: [
-        'Consider reflecting on what brought you to write this entry today.',
-        'Think about how you can maintain or improve your current emotional state.',
-        'Practice gratitude for the positive aspects of your day.'
-      ],
-      patterns: ['Clear emotional expression with good self-awareness'],
-      growthAreas: ['Regular reflection practice to build emotional intelligence']
+      suggestions: generateSuggestions(),
+      patterns: detectedEmotions.length > 0 
+        ? [`Clear expression of ${detectedEmotions.join(', ')} emotions`]
+        : ['Clear emotional expression with good self-awareness'],
+      growthAreas: entry.sentiment?.label === 'positive'
+        ? ['Continue building on this momentum with regular reflection']
+        : ['Regular reflection practice to build emotional intelligence']
     }
   }
 

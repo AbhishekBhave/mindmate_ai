@@ -20,6 +20,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import type { Category, Post, Reply, CommunityState } from '@/types'
+import {
+  getUserReaction,
+  isPostSaved,
+  saveUserInteraction,
+  getReactionsCount,
+  getCurrentUserId
+} from './interactions'
 
 // Wordlists for pseudonym generation
 const adjectives = [
@@ -61,6 +68,33 @@ export default function CommunityClient({ user }: CommunityClientProps) {
   const [newPostTitle, setNewPostTitle] = useState<string>('')
   const [newPostContent, setNewPostContent] = useState<string>('')
   const [isCreatingPost, setIsCreatingPost] = useState(false)
+
+  // Interaction state
+  const [reactions, setReactions] = useState<Record<string, string>>({})
+  const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set())
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set())
+  const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    // Load saved state from localStorage
+    const userId = getCurrentUserId()
+    const saved = localStorage.getItem('mindmate_community_interactions')
+    if (saved) {
+      try {
+        const data = JSON.parse(saved)
+        setSavedPosts(new Set(data.saved?.map((s: any) => s.postId) || []))
+        const reactionMap: Record<string, string> = {}
+        data.reactions?.forEach((r: any) => {
+          if (r.userId === userId) {
+            reactionMap[r.postId] = r.emoji
+          }
+        })
+        setReactions(reactionMap)
+      } catch (e) {
+        console.error('Failed to load interactions:', e)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     loadCategories()
@@ -169,6 +203,71 @@ export default function CommunityClient({ user }: CommunityClientProps) {
     } finally {
       setIsCreatingPost(false)
     }
+  }
+
+  // Reaction handlers
+  const handleReaction = (postId: string, emoji: string) => {
+    const currentReaction = reactions[postId]
+    
+    // Toggle reaction
+    if (currentReaction === emoji) {
+      // Remove reaction
+      const newReactions = { ...reactions }
+      delete newReactions[postId]
+      setReactions(newReactions)
+      saveUserInteraction('reaction', { postId, emoji: null })
+    } else {
+      // Add or change reaction
+      const newReactions = { ...reactions, [postId]: emoji }
+      setReactions(newReactions)
+      saveUserInteraction('reaction', { postId, emoji })
+    }
+  }
+
+  // Save handler
+  const handleSave = (postId: string) => {
+    const newSavedPosts = new Set(savedPosts)
+    if (newSavedPosts.has(postId)) {
+      newSavedPosts.delete(postId)
+      toast.success('Post unsaved')
+    } else {
+      newSavedPosts.add(postId)
+      toast.success('Post saved')
+    }
+    setSavedPosts(newSavedPosts)
+    saveUserInteraction('saved', { postId })
+  }
+
+  // Reply handlers
+  const handleReplyClick = (postId: string) => {
+    const newExpanded = new Set(expandedReplies)
+    if (newExpanded.has(postId)) {
+      newExpanded.delete(postId)
+    } else {
+      newExpanded.add(postId)
+    }
+    setExpandedReplies(newExpanded)
+  }
+
+  const handleReplySubmit = async (postId: string) => {
+    const content = replyInputs[postId]?.trim()
+    if (!content) return
+
+    const sanitized = content.replace(/<[^>]*>/g, '') // Basic sanitization
+    
+    // Save to localStorage
+    saveUserInteraction('comment', { postId, content: sanitized })
+
+    // Clear input
+    const newInputs = { ...replyInputs }
+    delete newInputs[postId]
+    setReplyInputs(newInputs)
+
+    toast.success('Reply posted!')
+  }
+
+  const handleReplyInput = (postId: string, value: string) => {
+    setReplyInputs({ ...replyInputs, [postId]: value })
   }
 
   return (
@@ -382,23 +481,100 @@ export default function CommunityClient({ user }: CommunityClientProps) {
                         {post.content}
                       </p>
                       
-                      <div className="flex items-center justify-between text-sm text-slate-500">
-                        <div className="flex items-center gap-4">
-                          <span className="flex items-center gap-1">
-                            <Heart className="h-4 w-4" />
-                            {post.reaction_count}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="h-4 w-4" />
-                            {post.reply_count}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Bookmark className="h-4 w-4" />
-                            {post.save_count}
-                          </span>
+                      {/* Interaction buttons */}
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleReaction(post.id, '❤️')
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                              reactions[post.id] === '❤️' ? 'bg-pink-100 text-pink-600' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            ❤️ {post.reaction_count + (reactions[post.id] ? 1 : 0)}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleReaction(post.id, '👍')
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                              reactions[post.id] === '👍' ? 'bg-blue-100 text-blue-600' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            👍 {post.reaction_count}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleReaction(post.id, '🎉')
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                              reactions[post.id] === '🎉' ? 'bg-yellow-100 text-yellow-600' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            🎉 {post.reaction_count}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleReplyClick(post.id)
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-600 hover:bg-slate-100 transition-colors"
+                          >
+                            💬 Reply
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleSave(post.id)
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                              savedPosts.has(post.id) ? 'text-yellow-600' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {savedPosts.has(post.id) ? '📌 Saved' : '🔖 Save'}
+                          </button>
                         </div>
-                        <span>{getTimeAgo(post.created_at)}</span>
+                        <span className="text-xs text-slate-500">{getTimeAgo(post.created_at)}</span>
                       </div>
+
+                      {/* Reply input */}
+                      {expandedReplies.has(post.id) && (
+                        <div className="mt-4 pt-4 border-t border-slate-200" onClick={(e) => e.stopPropagation()}>
+                          <Textarea
+                            placeholder="Write a reply..."
+                            value={replyInputs[post.id] || ''}
+                            onChange={(e) => handleReplyInput(post.id, e.target.value)}
+                            rows={3}
+                            className="mb-2"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && e.ctrlKey) {
+                                handleReplySubmit(post.id)
+                              }
+                            }}
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleReplySubmit(post.id)}
+                              disabled={!replyInputs[post.id]?.trim()}
+                            >
+                              Submit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReplyClick(post.id)}
+                            >
+                              Cancel
+                            </Button>
+                            <span className="text-xs text-slate-500 self-center ml-auto">Ctrl+Enter to submit</span>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>

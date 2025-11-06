@@ -52,14 +52,10 @@ export function InteractiveCard({
               transition={{ duration: 2, repeat: Infinity }}
             />
             
-            {/* Icon with rotation animation */}
-            <motion.div
-              className="mb-4 inline-block"
-              animate={isHovered ? { rotate: 360 } : { rotate: 0 }}
-              transition={{ duration: 0.6 }}
-            >
+            {/* Icon without rotation animation */}
+            <div className="mb-4 inline-block">
               {icon}
-            </motion.div>
+            </div>
 
             <CardTitle className="text-xl font-bold text-gray-900 dark:text-white mb-2">
               {title}

@@ -41,6 +41,12 @@ interface Entry {
     emotions?: string[]
     summary?: string
     ai_feedback?: string
+    comprehensive_analysis?: {
+      insights?: string[]
+      suggestions?: string[]
+      patterns?: string[]
+      growthAreas?: string[]
+    } | null
     created_at: string
   }
 }
@@ -110,30 +116,43 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
     // Use ai_feedback if available, otherwise fallback to summary
     const aiFeedback = sentiment.ai_feedback || sentiment.summary || 'Ready for today\'s reflection? I\'m here to listen.'
     
+    // Extract comprehensive analysis if available
+    const comprehensiveAnalysis = sentiment.comprehensive_analysis
+    
     console.log('📊 [DASHBOARD] Updating last analysis:', {
       label: sentiment.label,
       hasAiFeedback: !!sentiment.ai_feedback,
       hasSummary: !!sentiment.summary,
+      hasComprehensiveAnalysis: !!comprehensiveAnalysis,
       feedbackLength: aiFeedback.length
     })
 
+    // Use AI-generated values if available, otherwise use fallbacks
     setLastAnalysis({
       sentiment: sentiment.label,
       confidence: typeof sentiment.confidence === 'number' ? Math.round(sentiment.confidence * 100) : 50,
       suggestion: aiFeedback,
       emotions: sentiment.emotions || ['Reflective'],
-      insights: [
-        `Your entry shows ${sentiment.label} emotional patterns.`,
-        'This type of reflection demonstrates emotional awareness and self-reflection skills.',
-        'Consider how these feelings might be connected to recent events or ongoing situations.'
-      ],
-      suggestions: [
-        'Consider reflecting on what brought you to write this entry today.',
-        'Think about how you can maintain or improve your current emotional state.',
-        'Practice gratitude for the positive aspects of your day.'
-      ],
-      patterns: ['Clear emotional expression with good self-awareness'],
-      growthAreas: ['Regular reflection practice to build emotional intelligence']
+      insights: comprehensiveAnalysis?.insights && comprehensiveAnalysis.insights.length > 0
+        ? comprehensiveAnalysis.insights
+        : [
+            `Your entry shows ${sentiment.label} emotional patterns.`,
+            'This type of reflection demonstrates emotional awareness and self-reflection skills.',
+            'Consider how these feelings might be connected to recent events or ongoing situations.'
+          ],
+      suggestions: comprehensiveAnalysis?.suggestions && comprehensiveAnalysis.suggestions.length > 0
+        ? comprehensiveAnalysis.suggestions
+        : [
+            'Consider reflecting on what brought you to write this entry today.',
+            'Think about how you can maintain or improve your current emotional state.',
+            'Practice gratitude for the positive aspects of your day.'
+          ],
+      patterns: comprehensiveAnalysis?.patterns && comprehensiveAnalysis.patterns.length > 0
+        ? comprehensiveAnalysis.patterns
+        : ['Clear emotional expression with good self-awareness'],
+      growthAreas: comprehensiveAnalysis?.growthAreas && comprehensiveAnalysis.growthAreas.length > 0
+        ? comprehensiveAnalysis.growthAreas
+        : ['Regular reflection practice to build emotional intelligence']
     })
   }
 
@@ -183,6 +202,7 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
             emotions: sentiment.emotions || [],
             summary: sentiment.summary,
             ai_feedback: sentiment.ai_feedback || sentiment.summary,
+            comprehensive_analysis: sentiment.comprehensive_analysis || null,
             created_at: data.data.created_at
           } : undefined
         }
@@ -198,17 +218,26 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
         const updatedInsights = calculateInsightsFromEntries([newEntry, ...entries])
         setInsights(updatedInsights)
         
-        // Update last analysis for AI guidance
+        // Update last analysis for AI guidance using comprehensive analysis if available
         if (sentiment) {
+          const comprehensiveAnalysis = sentiment.comprehensive_analysis
           setLastAnalysis({
             sentiment: sentiment.label,
             confidence: Math.round(sentiment.confidence * 100),
             suggestion: sentiment.ai_feedback || sentiment.summary || 'Analysis complete',
             emotions: sentiment.emotions || [],
-            insights: [`Your entry shows ${sentiment.label} emotional patterns.`],
-            suggestions: ['Consider reflecting on this entry later.'],
-            patterns: ['Clear emotional expression'],
-            growthAreas: ['Regular reflection practice']
+            insights: comprehensiveAnalysis?.insights && comprehensiveAnalysis.insights.length > 0
+              ? comprehensiveAnalysis.insights
+              : [`Your entry shows ${sentiment.label} emotional patterns.`],
+            suggestions: comprehensiveAnalysis?.suggestions && comprehensiveAnalysis.suggestions.length > 0
+              ? comprehensiveAnalysis.suggestions
+              : ['Consider reflecting on this entry later.'],
+            patterns: comprehensiveAnalysis?.patterns && comprehensiveAnalysis.patterns.length > 0
+              ? comprehensiveAnalysis.patterns
+              : ['Clear emotional expression'],
+            growthAreas: comprehensiveAnalysis?.growthAreas && comprehensiveAnalysis.growthAreas.length > 0
+              ? comprehensiveAnalysis.growthAreas
+              : ['Regular reflection practice']
           })
         }
         

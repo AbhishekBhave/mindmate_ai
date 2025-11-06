@@ -154,19 +154,20 @@ export default function SignUpClient() {
         />
       </div>
 
-      {/* Floating particles */}
+      {/* Floating particles with glowing effect */}
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(15)].map((_, i) => {
+        {[...Array(30)].map((_, i) => {
           // Use deterministic positioning based on index to avoid hydration mismatch
           const left = ((i * 7) % 100) + (i * 3) % 20
           const top = ((i * 11) % 100) + (i * 5) % 15
-          const duration = 10 + (i % 10)
-          const delay = (i % 5) * 0.5
+          const duration = 8 + (i % 10)
+          const delay = (i % 5) * 0.3
+          const glowDuration = 2 + (i % 3)
           
           return (
             <motion.div
               key={i}
-              className="absolute w-2 h-2 bg-purple-400/20 rounded-full"
+              className="absolute w-3 h-3 bg-purple-400 rounded-full"
               style={{
                 left: `${left}%`,
                 top: `${top}%`,
@@ -174,17 +175,46 @@ export default function SignUpClient() {
               animate={{
                 y: [0, -100, 0],
                 x: [0, 50, -50, 0],
-                opacity: [0, 1, 0],
+                opacity: [0.3, 1, 0.3],
+                scale: [0.8, 1.2, 0.8],
+                boxShadow: [
+                  '0 0 0px rgba(183, 148, 246, 0.3)',
+                  '0 0 20px rgba(183, 148, 246, 0.8)',
+                  '0 0 0px rgba(183, 148, 246, 0.3)',
+                ],
               }}
               transition={{
                 duration,
                 repeat: Infinity,
                 delay,
+                boxShadow: {
+                  duration: glowDuration,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                },
               }}
             />
           )
         })}
       </div>
+
+      {/* Brain silhouette in background */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none flex items-center justify-center"
+        animate={{
+          opacity: [0.05, 0.08, 0.05],
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      >
+        <Brain 
+          className="w-[600px] h-[600px] text-purple-400/20"
+          strokeWidth={0.5}
+        />
+      </motion.div>
 
       {/* Neural Network Pattern */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-[-1]">
