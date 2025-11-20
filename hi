@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""
+Simple CLI: asks "How are you feeling today?",
+gives a friendly reaction, and appends the response to feelings.txt with a timestamp.
+"""
+
+from datetime import datetime
+
+def simple_sentiment(answer: str) -> str:
+    a = answer.lower()
+    if any(word in a for word in ("great", "good", "awesome", "fantastic", "happy", "amazing")):
+        return "😊 You're doing great — keep it up!"
+    if any(word in a for word in ("okay", "fine", "alright", "neutral")):
+        return "🙂 Sounds steady — hope the rest of your day goes well."
+    if any(word in a for word in ("tired", "exhausted", "sleepy")):
+        return "😴 Maybe a short break or a nap could help."
+    if any(word in a for word in ("sad", "down", "depressed", "unhappy", "bad")):
+        return "💬 I'm sorry you're feeling that way — consider talking to someone you trust."
+    if any(word in a for word in ("anxious", "nervous", "stressed", "stressed out")):
+        return "🧘 Try a breathing exercise or a short walk — small resets help."
+    return "👍 Thanks for sharing — it's okay to have mixed feelings."
+
+def log_response(answer: str, filename: str = "feelings.txt"):
+    ts = datetime.now().isoformat(sep=' ', timespec='seconds')
+    line = f"{ts} | {answer.strip()}\n"
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(line)
+
+def main():
+    print("Hi! Quick check-in — how are you feeling today?")
+    answer = input("> ").strip()
+    if not answer:
+        print("You didn't type anything. That's okay — come back when you want to share.")
+        return
+    reaction = simple_sentiment(answer)
+    print(reaction)
+    try:
+        log_response(answer)
+        print("I logged your response to feelings.txt (local file).")
+    except Exception as e:
+        print(f"Could not save your response: {e}")
+
+if __name__ == "__main__":
+    main()
