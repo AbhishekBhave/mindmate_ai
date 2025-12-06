@@ -27,7 +27,8 @@ An AI-powered journaling application built with Next.js 16, TypeScript, and Supa
 
 - Node.js 18+ 
 - npm, yarn, pnpm, or bun
-- Supabase account
+- **Supabase account** (free tier works) - [Sign up here](https://supabase.com)
+- **OpenAI API key** (required for AI features) - [Get one here](https://platform.openai.com/api-keys)
 
 ### Environment Setup
 
@@ -44,14 +45,26 @@ npm install
 
 3. Set up environment variables:
 ```bash
-cp .env.local.example .env.local
+cp .env.example .env.local
 ```
 
-Edit `.env.local` with your Supabase credentials:
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+**⚠️ IMPORTANT: The app requires API keys to function properly.**
+
+Edit `.env.local` with your own credentials:
+
+**Required for full functionality:**
+- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key  
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+- `OPENAI_API_KEY` - Your OpenAI API key (get from https://platform.openai.com/api-keys)
+
+**What happens without keys?**
+- ✅ App will load without crashing (graceful fallbacks)
+- ❌ Authentication won't work (sign-in/sign-up will fail)
+- ❌ AI analysis will show demo messages only
+- ❌ Database operations won't work
+
+**Each person needs their own keys** - API keys are personal and should never be shared.
 
 ### Development Workflow
 

@@ -826,46 +826,56 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
                         transition={{ duration: 0.3 }}
                       >
                         {chartData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height={200}>
-                            <AreaChart data={chartData}>
-                              <defs>
-                                <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
-                                </linearGradient>
-                              </defs>
-                              <XAxis dataKey="date" stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
-                              <YAxis domain={[0, 100]} stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 116, 139, 0.1)" />
-                              <Tooltip
-                                content={({ active, payload, label }) => {
-                                  if (active && payload && payload.length) {
-                                    const data = payload[0].payload
-                                    return (
-                                      <div className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg p-3 shadow-lg">
-                                        <p className="font-semibold text-slate-800">{label}</p>
-                                        <p className="text-purple-600">Mood: {data.mood.toFixed(1)}%</p>
-                                        {typeof data.confidence === 'number' && !isNaN(data.confidence) && data.confidence > 0 && (
-                                          <p className="text-slate-600">Confidence: {data.confidence.toFixed(0)}%</p>
-                                        )}
-                                        {data.emotions && Array.isArray(data.emotions) && data.emotions.length > 0 && (
-                                          <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
-                                        )}
-                                      </div>
-                                    )
-                                  }
-                                  return null
-                                }}
-                              />
-                              <Area 
-                                type="monotone" 
-                                dataKey="mood" 
-                                stroke="#8B5CF6" 
-                                fill="url(#colorMood)" 
-                                strokeWidth={2}
-                              />
-                            </AreaChart>
-                          </ResponsiveContainer>
+                          <>
+                            {chartData.length === 1 && (
+                              <div className="text-center text-sm text-slate-500 mb-2">
+                                <Sparkles className="h-4 w-4 inline mr-1 text-purple-500" />
+                                Keep journaling to see your mood trend over time!
+                              </div>
+                            )}
+                            <ResponsiveContainer width="100%" height={200}>
+                              <AreaChart data={chartData}>
+                                <defs>
+                                  <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                                  </linearGradient>
+                                </defs>
+                                <XAxis dataKey="date" stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
+                                <YAxis domain={[0, 100]} stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 116, 139, 0.1)" />
+                                <Tooltip
+                                  content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                      const data = payload[0].payload
+                                      return (
+                                        <div className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg p-3 shadow-lg">
+                                          <p className="font-semibold text-slate-800">{label}</p>
+                                          <p className="text-purple-600">Mood: {data.mood.toFixed(1)}%</p>
+                                          {typeof data.confidence === 'number' && !isNaN(data.confidence) && data.confidence > 0 && (
+                                            <p className="text-slate-600">Confidence: {data.confidence.toFixed(0)}%</p>
+                                          )}
+                                          {data.emotions && Array.isArray(data.emotions) && data.emotions.length > 0 && (
+                                            <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
+                                          )}
+                                        </div>
+                                      )
+                                    }
+                                    return null
+                                  }}
+                                />
+                                <Area 
+                                  type="monotone" 
+                                  dataKey="mood" 
+                                  stroke="#8B5CF6" 
+                                  fill="url(#colorMood)" 
+                                  strokeWidth={2}
+                                  dot={{ r: 6, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }}
+                                  activeDot={{ r: 8, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }}
+                                />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          </>
                         ) : (
                           <div className="h-[200px] flex items-center justify-center text-slate-500">
                             <div className="text-center">

@@ -111,11 +111,12 @@ export function MockEntry() {
           ]
         })
       } else {
-        console.error('❌ [DEMO] Analysis failed:', data.error)
+        // Don't log the full error (may contain sensitive info)
+        console.warn('⚠️ [DEMO] Analysis returned error:', data.error?.substring(0, 100) || 'Unknown error')
         setAnalysis({ 
           sentiment: 'neutral',
           confidence: 50,
-          insights: ['Unable to analyze entry at this time.']
+          insights: ['Unable to analyze entry at this time. Please check your OpenAI API key configuration.']
         })
       }
     } catch (error) {

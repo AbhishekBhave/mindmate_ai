@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase/client'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client'
 import { signUpSchema, type SignUpFormData } from '@/lib/validations/auth'
 import { motion } from 'framer-motion'
 import { Mail, AlertCircle, Brain, Eye, EyeOff, ArrowLeft, CheckCircle } from 'lucide-react'
@@ -43,16 +43,61 @@ export default function SignUpClient() {
       // Validate form data
       const validatedData = signUpSchema.parse(formData)
 
+      // Check Supabase configuration before attempting sign-up
+      if (!isSupabaseConfigured) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        console.error('[SIGN-UP] Supabase not configured:', {
+          isConfigured: isSupabaseConfigured,
+          url: supabaseUrl || 'NOT SET',
+          urlLength: supabaseUrl?.length || 0
+        })
+        toast.error('Supabase is not configured. Please check your .env.local file and restart the dev server.')
+        return
+      }
+
+      console.log('[SIGN-UP] Attempting sign-up with configured Supabase client')
+
       // Sign up with Supabase
-      const { data, error } = await supabase.auth.signUp({
-        email: validatedData.email,
-        password: validatedData.password,
-        options: {
-          data: {
-            display_name: validatedData.displayName || validatedData.email.split('@')[0]
+      let data, error
+      try {
+        const result = await supabase.auth.signUp({
+          email: validatedData.email,
+          password: validatedData.password,
+          options: {
+            data: {
+              display_name: validatedData.displayName || validatedData.email.split('@')[0]
+            }
           }
+        })
+        data = result.data
+        error = result.error
+        
+        if (error) {
+          console.error('[SIGN-UP] Supabase error:', error)
+        } else {
+          console.log('[SIGN-UP] Sign-up successful:', { userId: data.user?.id })
         }
-      })
+      } catch (fetchError: any) {
+        console.error('[SIGN-UP] Network/fetch error:', {
+          message: fetchError.message,
+          name: fetchError.name,
+          stack: fetchError.stack?.substring(0, 200)
+        })
+        
+        // Check if it's a network error
+        if (fetchError.message?.includes('Failed to fetch') || 
+            fetchError.message?.includes('fetch') ||
+            fetchError.name === 'TypeError' ||
+            fetchError.name === 'AuthRetryableFetchError') {
+          toast.error('Unable to connect to Supabase. Please check your internet connection and Supabase project status.')
+          console.error('[SIGN-UP] Connection failed. Verify:', {
+            supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+            isConfigured: isSupabaseConfigured
+          })
+          return
+        }
+        throw fetchError
+      }
 
       if (error) {
         console.error('Sign up error:', error)

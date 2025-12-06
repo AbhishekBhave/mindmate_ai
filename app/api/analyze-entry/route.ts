@@ -35,11 +35,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (!openai) {
-      console.error('❌ [ANALYZE-ENTRY] OpenAI client not available')
-      return NextResponse.json(
-        { ok: false, error: 'OpenAI API key not configured' },
-        { status: 500 }
-      )
+      console.warn('⚠️ [ANALYZE-ENTRY] OpenAI client not available - returning demo fallback')
+      // Return a graceful fallback for demo purposes when OpenAI is not configured
+      return NextResponse.json({
+        ok: true,
+        data: {
+          sentiment: 'neutral',
+          confidence: 50,
+          suggestion: 'Thank you for sharing your thoughts. This is a demo response - configure your OpenAI API key for full AI analysis.',
+          ai_feedback: 'Thank you for sharing your thoughts. This is a demo response - configure your OpenAI API key for full AI analysis.',
+          emotions: ['Reflective'],
+          insights: ['Your entry shows emotional awareness and self-reflection skills. Configure OpenAI API key for personalized insights.'],
+          suggestions: ['Consider reflecting on what brought you to write this entry today.', 'Set up your OpenAI API key in .env.local to enable full AI analysis.'],
+          patterns: ['Clear emotional expression with good self-awareness'],
+          growthAreas: ['Regular reflection practice to build emotional intelligence']
+        }
+      })
     }
 
     console.log('✅ [ANALYZE-ENTRY] OpenAI client available, proceeding...')
@@ -95,8 +106,30 @@ Requirements:
       console.error('❌ [ANALYZE-ENTRY] OpenAI API error:', {
         message: error?.message,
         code: error?.code,
-        type: error?.type
+        type: error?.type,
+        status: error?.status
       })
+      
+      // Handle specific OpenAI API errors gracefully
+      if (error?.status === 401 || error?.message?.includes('Incorrect API key') || error?.message?.includes('401')) {
+        console.warn('⚠️ [ANALYZE-ENTRY] OpenAI API key error - returning fallback')
+        return NextResponse.json({
+          ok: true,
+          data: {
+            sentiment: 'neutral',
+            confidence: 50,
+            suggestion: 'Thank you for sharing your thoughts. There was an issue with the AI service - please check your OpenAI API key configuration.',
+            ai_feedback: 'Thank you for sharing your thoughts. There was an issue with the AI service - please check your OpenAI API key configuration.',
+            emotions: ['Reflective'],
+            insights: ['Your entry shows emotional awareness and self-reflection skills.'],
+            suggestions: ['Consider reflecting on what brought you to write this entry today.'],
+            patterns: ['Clear emotional expression with good self-awareness'],
+            growthAreas: ['Regular reflection practice to build emotional intelligence']
+          }
+        })
+      }
+      
+      // For other errors, throw to be caught by outer catch block
       throw error
     }
 

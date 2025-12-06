@@ -85,17 +85,15 @@ export function JournalHeader({ userEmail, onSignOut, onSettingsOpen, onNotifica
             {/* User avatar with purple gradient ring */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="relative cursor-pointer"
+                <button
+                  className="relative cursor-pointer hover:scale-105 active:scale-95 transition-transform duration-150"
                 >
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 p-[2px]">
                     <div className="w-full h-full rounded-full bg-white dark:bg-gray-800 flex items-center justify-center backdrop-blur-xl">
                       <UserIcon className="h-5 w-5 text-purple-600" />
                     </div>
                   </div>
-                </motion.div>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 backdrop-blur-xl bg-white/10 border border-white/20" align="end">
                 <div className="flex items-center justify-start gap-2 p-2">
