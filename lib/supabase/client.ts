@@ -43,34 +43,11 @@ if (!hasValidConfig) {
 }
 
 // Create the Supabase client
-// IMPORTANT: Use actual values - if they're not set, the client will fail
-// but we need to create it anyway to prevent module errors
-const client = createBrowserClient(
+// Use actual values if available, otherwise use placeholders (will fail on use)
+export const supabase = createBrowserClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key'
 )
-
-// If config is invalid, override auth methods to show clear errors
-if (!hasValidConfig) {
-  const originalSignUp = client.auth.signUp.bind(client.auth)
-  const originalSignIn = client.auth.signInWithPassword.bind(client.auth)
-  
-  client.auth.signUp = async (...args: any[]) => {
-    console.error('❌ [SUPABASE] Cannot sign up - Supabase not configured!')
-    console.error('Current URL:', supabaseUrl || 'NOT SET')
-    console.error('Please check your .env.local file and restart the dev server.')
-    throw new Error('Supabase is not configured. Check .env.local and restart dev server.')
-  }
-  
-  client.auth.signInWithPassword = async (...args: any[]) => {
-    console.error('❌ [SUPABASE] Cannot sign in - Supabase not configured!')
-    console.error('Current URL:', supabaseUrl || 'NOT SET')
-    console.error('Please check your .env.local file and restart the dev server.')
-    throw new Error('Supabase is not configured. Check .env.local and restart dev server.')
-  }
-}
-
-export const supabase = client
 
 // Export a helper to check if Supabase is properly configured
 export const isSupabaseConfigured = hasValidConfig

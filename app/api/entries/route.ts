@@ -235,15 +235,18 @@ export async function PUT(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url)
-    const userId = url.searchParams.get('userId')
+    // Get authenticated user - don't trust client-provided userId
+    const supabase = await getServerSupabase()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-    if (!userId) {
+    if (userError || !user) {
       return NextResponse.json(
-        { ok: false, error: 'userId is required' },
-        { status: 400 }
+        { ok: false, error: 'Unauthorized. Please sign in.' },
+        { status: 401 }
       )
     }
+
+    const userId = user.id
 
     const { data: entries, error } = await supabaseAdmin
       .from('entries')
@@ -289,6 +292,17 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Get authenticated user
+    const supabase = await getServerSupabase()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized. Please sign in.' },
+        { status: 401 }
+      )
+    }
+
     const url = new URL(request.url)
     const entryId = url.searchParams.get('entryId')
 
@@ -299,11 +313,12 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Delete the entry (sentiment will be cascade deleted)
+    // Delete only if entry belongs to the authenticated user
     const { error } = await supabaseAdmin
       .from('entries')
       .delete()
       .eq('id', entryId)
+      .eq('user_id', user.id)
 
     if (error) {
       console.error('Error deleting entry:', error)

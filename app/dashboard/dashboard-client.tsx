@@ -7,10 +7,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Send, Plus, Edit2, Trash2, TrendingUp, Calendar, Clock, Heart, 
+import {
+  Send, Plus, Edit2, Trash2, TrendingUp, Calendar, Clock, Heart,
   Brain, Sparkles, Target, BookOpen, BarChart3, Users, Settings,
-  ChevronDown, ChevronUp, Eye, EyeOff, Bell, Smile, Meh, Frown, MessageSquare
+  ChevronDown, ChevronUp, Eye, EyeOff, Bell, Smile, Meh, Frown, MessageSquare, Search, X
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
@@ -26,29 +26,44 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+interface ComprehensiveAnalysis {
+  insights?: string[]
+  suggestions?: string[]
+  patterns?: string[]
+  growthAreas?: string[]
+}
+
+interface EntrySentiment {
+  id: string
+  entry_id: string
+  score: number
+  label: 'positive' | 'neutral' | 'negative'
+  confidence: number
+  emotions?: string[]
+  summary?: string
+  ai_feedback?: string
+  comprehensive_analysis?: ComprehensiveAnalysis | null
+  created_at: string
+}
+
 interface Entry {
   id: string
   content: string
   created_at: string
   word_count?: number
   reading_time?: number
-  sentiment?: {
-    id: string
-    entry_id: string
-    score: number
-    label: string
-    confidence: number
-    emotions?: string[]
-    summary?: string
-    ai_feedback?: string
-    comprehensive_analysis?: {
-      insights?: string[]
-      suggestions?: string[]
-      patterns?: string[]
-      growthAreas?: string[]
-    } | null
-    created_at: string
-  }
+  sentiment?: EntrySentiment
+}
+
+interface LastAnalysis {
+  sentiment: string
+  confidence: number
+  suggestion: string
+  emotions: string[]
+  insights: string[]
+  suggestions: string[]
+  patterns: string[]
+  growthAreas: string[]
 }
 
 interface DashboardClientProps {
@@ -75,13 +90,26 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
   const [isLoading, setIsLoading] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saving' | 'saved' | 'idle'>('idle')
   const [placeholderText, setPlaceholderText] = useState('How are you feeling today? What\'s on your mind?')
-  const [lastAnalysis, setLastAnalysis] = useState<any>(null)
+  const [lastAnalysis, setLastAnalysis] = useState<LastAnalysis | null>(null)
   const [showMoodChart, setShowMoodChart] = useState(true)
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
+
+  // Filter entries based on search query
+  const filteredEntries = entries.filter(entry => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      entry.content.toLowerCase().includes(query) ||
+      entry.sentiment?.label.toLowerCase().includes(query) ||
+      entry.sentiment?.emotions?.some(e => e.toLowerCase().includes(query)) ||
+      entry.sentiment?.ai_feedback?.toLowerCase().includes(query)
+    )
+  })
 
   useEffect(() => {
     // Set last analysis from first entry if available
@@ -97,6 +125,32 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
     }
   }, [newEntry])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + J to focus journal input
+      if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+        e.preventDefault()
+        textareaRef.current?.focus()
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+      // Cmd/Ctrl + Enter to submit entry when focused
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && document.activeElement === textareaRef.current) {
+        e.preventDefault()
+        if (newEntry.trim()) {
+          handleSubmitEntry(e as unknown as React.FormEvent)
+        }
+      }
+      // Escape to clear search
+      if (e.key === 'Escape' && searchQuery) {
+        setSearchQuery('')
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [newEntry, searchQuery])
+
   const refreshDashboard = async () => {
     try {
       // Trigger a page reload to get fresh server data
@@ -106,7 +160,7 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
     }
   }
 
-  const updateLastAnalysis = (sentiment: Entry['sentiment']) => {
+  const updateLastAnalysis = (sentiment: EntrySentiment | undefined) => {
     if (!sentiment) {
       console.log('📊 [DASHBOARD] No sentiment data available')
       setLastAnalysis(null)
@@ -513,6 +567,44 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Banner for New Users */}
+        {entries.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <Card className="bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10 border-purple-200/50 dark:border-purple-800/50">
+              <CardContent className="py-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-full bg-gradient-to-br from-purple-500 to-pink-500">
+                    <Sparkles className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                      Welcome to MindMate AI!
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 mb-3">
+                      Start your journaling journey by writing your first entry below. Our AI will analyze your emotions and provide personalized insights to support your mental wellness.
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-sm">
+                      <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                        <Brain className="h-3 w-3 mr-1" /> AI-Powered Analysis
+                      </Badge>
+                      <Badge variant="secondary" className="bg-pink-100 text-pink-700">
+                        <Heart className="h-3 w-3 mr-1" /> Mood Tracking
+                      </Badge>
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                        <Target className="h-3 w-3 mr-1" /> Personal Growth
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Two-Column Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
           {/* Left Column - Entry Creation */}
@@ -545,9 +637,10 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
                         required
                       />
                       
-                      {/* Character counter */}
-                      <div className="absolute bottom-3 right-3 text-xs text-slate-500">
-                        {newEntry.length} characters
+                      {/* Character counter and keyboard hint */}
+                      <div className="absolute bottom-3 right-3 flex items-center gap-3 text-xs text-slate-500">
+                        <span>{newEntry.length} characters</span>
+                        <span className="hidden sm:inline opacity-60">⌘+Enter to submit</span>
                       </div>
                     </div>
 
@@ -642,18 +735,46 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
             >
               <Card className="backdrop-blur-xl bg-white/80 border-white/20 shadow-xl">
                 <CardHeader>
-                  <CardTitle className="flex items-center text-xl text-slate-800 dark:text-slate-200">
-                    <BookOpen className="h-5 w-5 text-blue-500 mr-3" />
-                    Recent Entries
-                  </CardTitle>
-                  <CardDescription className="text-slate-600 dark:text-slate-400">
-                    Your emotional journey over time
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center text-xl text-slate-800 dark:text-slate-200">
+                        <BookOpen className="h-5 w-5 text-blue-500 mr-3" />
+                        Recent Entries
+                      </CardTitle>
+                      <CardDescription className="text-slate-600 dark:text-slate-400">
+                        Your emotional journey over time
+                      </CardDescription>
+                    </div>
+                  </div>
+                  {/* Search Bar */}
+                  <div className="relative mt-4">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder="Search entries by content, emotion, or mood..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 pr-10 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  {searchQuery && (
+                    <p className="text-sm text-slate-500 mt-2">
+                      Found {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'} matching "{searchQuery}"
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  {entries.length > 0 ? (
+                  {filteredEntries.length > 0 ? (
                     <div className="space-y-4">
-                      {entries.slice(0, 5).map((entry, index) => (
+                      {filteredEntries.slice(0, 10).map((entry, index) => (
                         <motion.div
                           key={entry.id}
                           initial={{ opacity: 0, y: 20 }}
@@ -782,9 +903,19 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
                     </div>
                   ) : (
                     <div className="text-center py-12 text-slate-500">
-                      <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg mb-2">No entries yet</p>
-                      <p className="text-sm">Start writing your first entry above!</p>
+                      {searchQuery ? (
+                        <>
+                          <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg mb-2">No matching entries</p>
+                          <p className="text-sm">Try a different search term or <button onClick={() => setSearchQuery('')} className="text-blue-500 hover:underline">clear the search</button></p>
+                        </>
+                      ) : (
+                        <>
+                          <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg mb-2">No entries yet</p>
+                          <p className="text-sm">Start writing your first entry above!</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -826,56 +957,46 @@ export default function DashboardClient({ user, initialData }: DashboardClientPr
                         transition={{ duration: 0.3 }}
                       >
                         {chartData.length > 0 ? (
-                          <>
-                            {chartData.length === 1 && (
-                              <div className="text-center text-sm text-slate-500 mb-2">
-                                <Sparkles className="h-4 w-4 inline mr-1 text-purple-500" />
-                                Keep journaling to see your mood trend over time!
-                              </div>
-                            )}
-                            <ResponsiveContainer width="100%" height={200}>
-                              <AreaChart data={chartData}>
-                                <defs>
-                                  <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
-                                  </linearGradient>
-                                </defs>
-                                <XAxis dataKey="date" stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
-                                <YAxis domain={[0, 100]} stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 116, 139, 0.1)" />
-                                <Tooltip
-                                  content={({ active, payload, label }) => {
-                                    if (active && payload && payload.length) {
-                                      const data = payload[0].payload
-                                      return (
-                                        <div className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg p-3 shadow-lg">
-                                          <p className="font-semibold text-slate-800">{label}</p>
-                                          <p className="text-purple-600">Mood: {data.mood.toFixed(1)}%</p>
-                                          {typeof data.confidence === 'number' && !isNaN(data.confidence) && data.confidence > 0 && (
-                                            <p className="text-slate-600">Confidence: {data.confidence.toFixed(0)}%</p>
-                                          )}
-                                          {data.emotions && Array.isArray(data.emotions) && data.emotions.length > 0 && (
-                                            <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
-                                          )}
-                                        </div>
-                                      )
-                                    }
-                                    return null
-                                  }}
-                                />
-                                <Area 
-                                  type="monotone" 
-                                  dataKey="mood" 
-                                  stroke="#8B5CF6" 
-                                  fill="url(#colorMood)" 
-                                  strokeWidth={2}
-                                  dot={{ r: 6, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }}
-                                  activeDot={{ r: 8, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }}
-                                />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                          </>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <AreaChart data={chartData}>
+                              <defs>
+                                <linearGradient id="colorMood" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="date" stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
+                              <YAxis domain={[0, 100]} stroke="rgba(100, 116, 139, 0.8)" fontSize={12} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 116, 139, 0.1)" />
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0].payload
+                                    return (
+                                      <div className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg p-3 shadow-lg">
+                                        <p className="font-semibold text-slate-800">{label}</p>
+                                        <p className="text-purple-600">Mood: {data.mood.toFixed(1)}%</p>
+                                        {typeof data.confidence === 'number' && !isNaN(data.confidence) && data.confidence > 0 && (
+                                          <p className="text-slate-600">Confidence: {data.confidence.toFixed(0)}%</p>
+                                        )}
+                                        {data.emotions && Array.isArray(data.emotions) && data.emotions.length > 0 && (
+                                          <p className="text-slate-600">Emotions: {data.emotions.join(', ')}</p>
+                                        )}
+                                      </div>
+                                    )
+                                  }
+                                  return null
+                                }}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="mood" 
+                                stroke="#8B5CF6" 
+                                fill="url(#colorMood)" 
+                                strokeWidth={2}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
                         ) : (
                           <div className="h-[200px] flex items-center justify-center text-slate-500">
                             <div className="text-center">
